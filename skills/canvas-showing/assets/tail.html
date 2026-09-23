@@ -1,0 +1,156 @@
+</main></div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>
+// Convert pandoc <pre class="mermaid"> blocks into live divs, then render.
+document.querySelectorAll('pre.mermaid').forEach(function (pre) {
+  var div = document.createElement('div');
+  div.className = 'mermaid';
+  div.textContent = pre.textContent;
+  pre.replaceWith(div);
+});
+if (window.mermaid) {
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'base',
+    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+    fontSize: '14px',
+    flowchart: { curve: 'basis', htmlLabels: true, padding: 8 },
+    themeVariables: {
+      primaryColor: '#f6f3f1',
+      primaryBorderColor: '#cecac8',
+      primaryTextColor: '#242424',
+      lineColor: '#797776',
+      secondaryColor: '#cfdaf5',
+      tertiaryColor: '#ece7e2',
+      clusterBkg: '#efe9e4',
+      clusterBorder: '#cecac8',
+      edgeLabelBackground: '#f6f3f1',
+      nodeBorder: '#cecac8',
+      mainBkg: '#f6f3f1',
+      titleColor: '#242424',
+      actorBkg: '#f6f3f1',
+      actorBorder: '#cecac8',
+      actorTextColor: '#242424',
+      actorLineColor: '#cecac8',
+      signalColor: '#4e4d4d',
+      signalTextColor: '#242424',
+      labelBoxBkgColor: '#f6f3f1',
+      labelBoxBorderColor: '#cecac8',
+      labelTextColor: '#4e4d4d',
+      loopTextColor: '#4e4d4d',
+      noteBkgColor: '#cfdaf5',
+      noteTextColor: '#242424',
+      noteBorderColor: '#a0b5eb',
+      relationLabelColor: '#4e4d4d',
+      entityBorder: '#cecac8',
+      attributeBackgroundColorOdd: '#efe9e4',
+      attributeBackgroundColorEven: '#f6f3f1'
+    }
+  });
+  mermaid.run({ querySelector: '.mermaid' }).catch(function (e) {
+    console.warn('mermaid render failed', e);
+  });
+}
+</script>
+<script>
+(function () {
+  var c = document.getElementById('hero-canvas');
+  if (!c) return;
+  var ctx = c.getContext('2d');
+  var w, h, dpr;
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    w = c.clientWidth; h = c.clientHeight;
+    c.width = w * dpr; c.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+
+  // Monad-style atmospheric washes: soft pastel radial blobs,
+  // plus hairline pipeline nodes connected by thin curved ash lines.
+  function blob(x, y, r, color) {
+    var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, color);
+    g.addColorStop(1, 'rgba(246,243,241,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function node(x, y, label) {
+    ctx.font = '11px "IBM Plex Mono", monospace';
+    var tw = ctx.measureText(label).width;
+    var pw = tw + 28, ph = 24;
+    ctx.beginPath();
+    ctx.roundRect(x - pw / 2, y - ph / 2, pw, ph, 12);
+    ctx.fillStyle = 'rgba(246,243,241,0.85)';
+    ctx.fill();
+    ctx.strokeStyle = '#cecac8';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#4e4d4d';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y + 0.5);
+    return { x: x, y: y, w: pw };
+  }
+
+  function link(a, b) {
+    var x1 = a.x + a.w / 2, x2 = b.x - b.w / 2;
+    var c = Math.min(60, Math.max(4, (x2 - x1) / 2));
+    ctx.beginPath();
+    ctx.moveTo(x1, a.y);
+    ctx.bezierCurveTo(x1 + c, a.y, x2 - c, b.y, x2, b.y);
+    ctx.strokeStyle = '#cecac8';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+
+    // pastel washes behind content
+    blob(w * 0.12, h * 0.15, w * 0.22, 'rgba(255,148,115,0.35)');  // coral
+    blob(w * 0.88, h * 0.2,  w * 0.2,  'rgba(160,181,235,0.45)'); // sky
+    blob(w * 0.78, h * 0.95, w * 0.18, 'rgba(167,252,205,0.4)');  // mint
+    blob(w * 0.05, h * 0.9,  w * 0.14, 'rgba(236,218,152,0.4)');  // gold
+
+    // pipeline node chains in the clear band below the meta row:
+    // two edge groups when wide, one centered row, or two stacked rows.
+    var G1 = ['FIXTURES', 'JSON SERVER', 'LOCAL STORE'];
+    var G2 = ['3 ACCOUNTS', 'TEST CLOCK', 'FE-01–48'];
+    ctx.font = '11px "IBM Plex Mono", monospace';
+    var gap = 56;
+    function chainWidth(labels) {
+      var t = 0;
+      labels.forEach(function (l) { t += ctx.measureText(l).width + 28; });
+      return t + gap * (labels.length - 1);
+    }
+    function drawChain(labels, cx, y) {
+      var widths = labels.map(function (l) { return ctx.measureText(l).width + 28; });
+      var total = widths.reduce(function (a, b) { return a + b; }, 0) + gap * (labels.length - 1);
+      var x = cx - total / 2, prev = null;
+      labels.forEach(function (l, i) {
+        var n = node(x + widths[i] / 2, y, l);
+        if (prev) link(prev, n);
+        prev = n;
+        x += widths[i] + gap;
+      });
+    }
+    var w1 = chainWidth(G1), w2 = chainWidth(G2);
+    if (w1 + w2 + 120 < w) {
+      var y1 = h * 0.86;
+      drawChain(G1, w1 / 2 + 24, y1);
+      drawChain(G2, w - w2 / 2 - 24, y1);
+    } else if (Math.max(w1, w2) < w - 40) {
+      drawChain(G1, w / 2, h * 0.8);
+      drawChain(G2, w / 2, h * 0.93);
+    }
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+})();
+</script>
