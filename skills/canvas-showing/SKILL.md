@@ -1,6 +1,6 @@
 ---
 name: canvas-showing
-description: Render a document as a designed "canvas" web page — a single self-contained .html in Monad editorial style (parchment canvas, serif-400 headings, mono body, Lake Blue accent) with a canvas-drawn hero, sticky TOC, and auto-generated Mermaid diagrams. MANUAL INVOCATION ONLY — invoke only when the user explicitly asks for "canvas-showing" by name; do not auto-invoke for generic document-viewing or rendering requests.
+description: Render ANY document (markdown file, spec, notes, pasted text, GitHub doc — any language, any project) as a designed "canvas" web page — a single self-contained .html in Monad editorial style (parchment canvas, serif-400 headings, mono body, Lake Blue accent) with a canvas-drawn hero, sticky TOC, and auto-generated Mermaid diagrams. MANUAL INVOCATION ONLY — invoke only when the user explicitly asks for "canvas-showing" by name; do not auto-invoke for generic document-viewing or rendering requests.
 disable-model-invocation: true
 ---
 
@@ -16,7 +16,7 @@ All assets ship in [`assets/`](assets/): `spec.css` (full theme), `hero_template
    - Local file → copy it.
    - GitHub `blob/` URL → rewrite to `raw.githubusercontent.com/<owner>/<repo>/<branch>/<path>` and fetch. On 404/private, ask the user to paste the content.
    - Pasted text → write verbatim.
-2. **Copy the assets.** `spec.css` and `tail.html` go to the page dir unchanged. `hero_template.html` → `hero.html` with the announcement-bar text, kicker, `h1`, subtitle, and meta pills rewritten for this document. In `tail.html`, relabel the two pipeline label arrays (`G1`, `G2`) to a flow the document actually describes; if none fits, delete the `drawChain` block and keep only the pastel washes.
+2. **Copy the assets.** `spec.css` and `tail.html` go to the page dir unchanged. `hero_template.html` → `hero.html` with every `{{PLACEHOLDER}}` filled from this document: `ANNOUNCE_LEFT` (source breadcrumb, e.g. repo/path or origin), `ANNOUNCE_PILL` (a short status/tag chip), `KICKER` (doc type + date), `TITLE`, `SUBTITLE`, `META_1..4` (draft badge + 2–4 stat chips like section/feature counts — drop extras). In `tail.html`, relabel the two pipeline label arrays (`G1`, `G2`) to a flow the document actually describes; if none fits, delete the `drawChain` block and keep only the pastel washes.
 3. **Diagram pass — always on.** Walk every section; where a diagram beats prose, insert or replace with a ```` ```mermaid ```` block. Keep dense rule text, acceptance matrices, TBD lists, and code/interface blocks as-is — those are lookup material a diagram loses precision on. Mapping:
 
    | Content shape | Mermaid kind |
@@ -31,7 +31,7 @@ All assets ship in [`assets/`](assets/): `spec.css` (full theme), `hero_template
    | In-scope vs out-of-scope lists | `flowchart` with two `subgraph`s |
 
    Mermaid syntax rules: quote every label containing punctuation or CJK (`A["..."`), use `<br>` inside labels for line breaks, never leave parentheses in unquoted text.
-4. **Build a single file.** Name the output after the source document: `SPEC.md` → `SPEC.html`, `notes.markdown` → `notes.html`. For pasted text with no filename, use a slug of the document title. Run `pandoc source.md -f gfm -t html5 -s --toc --embed-resources --highlight-style=breezedark --metadata lang=zh-Hant --metadata title="<doc title>" -c spec.css -B hero.html -A tail.html -o <source-basename>.html` — `--embed-resources` inlines the stylesheet; `-B`/`-A` content is already inline, so the result is self-contained.
+4. **Build a single file.** Name the output after the source document: `SPEC.md` → `SPEC.html`, `notes.markdown` → `notes.html`. For pasted text with no filename, use a slug of the document title. Run `pandoc source.md -f gfm -t html5 -s --toc --embed-resources --highlight-style=breezedark --metadata lang=<doc-lang> --metadata title="<doc title>" -c spec.css -B hero.html -A tail.html -o <source-basename>.html` — set `lang` to the document's language (`zh-Hant`, `en`, `ja`, …). `--embed-resources` inlines the stylesheet; `-B`/`-A` content is already inline, so the result is self-contained.
    - Consecutive `>` blockquote lines collapse into one paragraph — end each line with `\` if the header metadata must stay on separate lines.
    - If the doc has a top `#` title that duplicates the hero, it is hidden by CSS already.
    - Mermaid still loads from the jsdelivr CDN in `tail.html`. For a fully offline file, download `mermaid.min.js` into the page dir and swap the CDN `src` for the local filename — `--embed-resources` will inline it.
