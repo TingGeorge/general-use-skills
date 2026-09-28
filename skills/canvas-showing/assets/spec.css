@@ -307,3 +307,32 @@ hr {
 }
 .mermaid svg { max-width: 100%; height: auto; }
 .mermaid .edgeLabel, .mermaid .label { font-family: var(--font-mono) !important; }
+
+/* ---------- diagram zoom pop-up ---------- */
+.mermaid { position: relative; }
+.zoom-btn {
+  position: absolute; top: 12px; right: 12px;
+  font: 13px var(--font-mono); color: var(--color-graphite);
+  background: var(--color-parchment); border: 1px solid var(--color-ash);
+  border-radius: 9999px; padding: 4px 14px; cursor: pointer;
+}
+.zoom-btn:hover, .zoom-bar button:hover { background: var(--color-periwinkle-mist); }
+.zoom-dialog {
+  width: 94vw; height: 92vh; max-width: none; max-height: none; padding: 0;
+  border: 1px solid var(--color-ash); border-radius: 24px;
+  background: var(--color-parchment); overflow: hidden;
+}
+.zoom-dialog[open] { display: flex; flex-direction: column; }
+.zoom-dialog::backdrop { background: rgba(36,36,36,.55); }
+.zoom-bar {
+  display: flex; gap: 8px; align-items: center; justify-content: flex-end;
+  padding: 12px 16px; border-bottom: 1px solid var(--color-ash);
+}
+.zoom-bar button {
+  font: 14px var(--font-mono); min-width: 44px; min-height: 36px;
+  background: var(--color-parchment); border: 1px solid var(--color-ash);
+  border-radius: 9999px; cursor: pointer; color: var(--color-off-black);
+}
+.zoom-bar output { font: 13px var(--font-mono); min-width: 52px; text-align: center; color: var(--color-graphite); }
+.zoom-stage { flex: 1; overflow: auto; padding: 24px; display: grid; }
+.zoom-stage svg { margin: auto; max-width: none !important; height: auto; }

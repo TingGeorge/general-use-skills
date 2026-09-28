@@ -1,14 +1,14 @@
 ---
 name: canvas-showing
-description: Render ANY document (markdown file, spec, notes, pasted text, GitHub doc — any language, any project) as a designed "canvas" web page — a single self-contained .html in Monad editorial style (parchment canvas, serif-400 headings, mono body, Lake Blue accent) with a canvas-drawn hero, sticky TOC, and auto-generated Mermaid diagrams. MANUAL INVOCATION ONLY — invoke only when the user explicitly asks for "canvas-showing" by name; do not auto-invoke for generic document-viewing or rendering requests.
+description: Render ANY document (markdown file, spec, notes, pasted text, GitHub doc — any language, any project) as a designed "canvas" web page — a single self-contained .html in Monad editorial style (parchment canvas, serif-400 headings, mono body, Lake Blue accent) with a canvas-drawn hero, sticky TOC, and auto-generated Mermaid diagrams with a zoomable pop-up viewer. MANUAL INVOCATION ONLY — invoke only when the user explicitly asks for "canvas-showing" by name; do not auto-invoke for generic document-viewing or rendering requests.
 disable-model-invocation: true
 ---
 
 # Canvas-Showing
 
-Turn a document into a **canvas page**: one self-contained `.html` file — Monad editorial style (parchment `#f6f3f1`, serif headings at weight 400, monospace body/UI text, Lake Blue `#2b59d1` as the single accent, hairline `#cecac8` borders, pill radii, no shadows), canvas-drawn hero, sticky TOC, auto-generated Mermaid diagrams. The output is a single portable file: CSS, hero, and scripts are inlined, so it opens by double-click and can be shared as-is.
+Turn a document into a **canvas page**: one self-contained `.html` file — Monad editorial style (parchment `#f6f3f1`, serif headings at weight 400, monospace body/UI text, Lake Blue `#2b59d1` as the single accent, hairline `#cecac8` borders, pill radii, no shadows), canvas-drawn hero, sticky TOC, auto-generated Mermaid diagrams (each with a 「⤢ 放大」 button that opens it alone in a zoomable pop-up). The output is a single portable file: CSS, hero, and scripts are inlined, so it opens by double-click and can be shared as-is.
 
-All assets ship in [`assets/`](assets/): `spec.css` (full theme), `hero_template.html` (announcement bar + canvas hero), `tail.html` (canvas drawing + Mermaid init in the Monad palette).
+All assets ship in [`assets/`](assets/): `spec.css` (full theme), `hero_template.html` (announcement bar + canvas hero), `tail.html` (canvas drawing + Mermaid init in the Monad palette + diagram zoom pop-up).
 
 ## Steps
 
@@ -16,7 +16,7 @@ All assets ship in [`assets/`](assets/): `spec.css` (full theme), `hero_template
    - Local file → copy it.
    - GitHub `blob/` URL → rewrite to `raw.githubusercontent.com/<owner>/<repo>/<branch>/<path>` and fetch. On 404/private, ask the user to paste the content.
    - Pasted text → write verbatim.
-2. **Copy the assets.** `spec.css` and `tail.html` go to the page dir unchanged. `hero_template.html` → `hero.html` with every `{{PLACEHOLDER}}` filled from this document: `ANNOUNCE_LEFT` (source breadcrumb, e.g. repo/path or origin), `ANNOUNCE_PILL` (a short status/tag chip), `KICKER` (doc type + date), `TITLE`, `SUBTITLE`, `META_1..4` (draft badge + 2–4 stat chips like section/feature counts — drop extras). In `tail.html`, relabel the two pipeline label arrays (`G1`, `G2`) to a flow the document actually describes; if none fits, delete the `drawChain` block and keep only the pastel washes.
+2. **Copy the assets.** `spec.css` and `tail.html` go to the page dir unchanged. `hero_template.html` → `hero.html` with every `{{PLACEHOLDER}}` filled from this document: `ANNOUNCE_LEFT` (source breadcrumb, e.g. repo/path or origin), `ANNOUNCE_PILL` (a short status/tag chip), `KICKER` (doc type + date), `TITLE`, `SUBTITLE`, `META_1..4` (draft badge + 2–4 stat chips like section/feature counts — drop extras). In `tail.html`, relabel the two pipeline label arrays (`G1`, `G2`) to a flow the document actually describes; if none fits, delete the `drawChain` block and keep only the pastel washes. The zoom pop-up labels in `tail.html` (`⤢ 放大`, `符合視窗`, `✕ 關閉`, `aria-label`s) are Traditional Chinese — translate them when the document is in another language.
 3. **Diagram pass — always on.** Walk every section; where a diagram beats prose, insert or replace with a ```` ```mermaid ```` block. Keep dense rule text, acceptance matrices, TBD lists, and code/interface blocks as-is — those are lookup material a diagram loses precision on. Mapping:
 
    | Content shape | Mermaid kind |
@@ -37,7 +37,7 @@ All assets ship in [`assets/`](assets/): `spec.css` (full theme), `hero_template
    - Mermaid still loads from the jsdelivr CDN in `tail.html`. For a fully offline file, download `mermaid.min.js` into the page dir and swap the CDN `src` for the local filename — `--embed-resources` will inline it.
 5. **Preview.** Browser tools reject `file:` URLs, so to show it in the built-in browser run `python3 -m http.server <port>` in the page dir (backgrounded) and `browser_open http://127.0.0.1:<port>/<name>.html`. If the browser shows an unrelated page the port is taken — pick another. If no browser is needed, skip this step and just hand over the file.
    - `browser_navigate` to a `localhost` URL can be rejected as `BrowserNavigationBlocked` even when the URL is valid — and it may still commit, leaving the tab on a `chrome-error://` page if the server is down. Verify the server with `curl -sI` first, and prefer `browser_open` + `127.0.0.1`, which sidesteps the block.
-6. **Verify.** `browser_screenshot` for proof. Completion check: `document.querySelectorAll('.mermaid svg').length` equals the mermaid block count and no `.mermaid` div lacks an `svg`; the fixed TOC must not overlap the hero (hero uses `margin-left`, not `padding-left` — already correct in `spec.css`).
+6. **Verify.** `browser_screenshot` for proof. Completion check: `document.querySelectorAll('.mermaid svg').length` equals the mermaid block count and no `.mermaid` div lacks an `svg`; `.zoom-btn` count equals the diagram count, and clicking one opens `.zoom-dialog[open]` with the diagram fitted (Esc closes it); the fixed TOC must not overlap the hero (hero uses `margin-left`, not `padding-left` — already correct in `spec.css`).
 7. **Report** the `.html` path (the deliverable — named after the source file), the preview URL if served, and that the file opens by double-click — no server needed after creation.
 
 ## Failure handling

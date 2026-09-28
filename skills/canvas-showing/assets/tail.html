@@ -1,4 +1,72 @@
 </main></div>
+<dialog class="zoom-dialog" aria-label="放大檢視圖表">
+  <div class="zoom-bar">
+    <button type="button" data-z="out" aria-label="縮小">−</button>
+    <output>100%</output>
+    <button type="button" data-z="in" aria-label="放大">＋</button>
+    <button type="button" data-z="fit">符合視窗</button>
+    <button type="button" data-z="close" aria-label="關閉">✕ 關閉</button>
+  </div>
+  <div class="zoom-stage"></div>
+</dialog>
+<script>
+// Each diagram gets a 「⤢ 放大」 button that opens it alone in a native <dialog>.
+// Defined before the Mermaid script so mermaid.run().then(addZoom) can call it.
+function addZoom() {
+  var dlg = document.querySelector('.zoom-dialog');
+  var stage = dlg.querySelector('.zoom-stage');
+  var out = dlg.querySelector('output');
+  var svg, baseW, scale = 1;
+
+  function apply() {
+    scale = Math.min(8, Math.max(0.2, scale));
+    svg.style.width = baseW * scale + 'px';
+    out.textContent = Math.round(scale * 100) + '%';
+  }
+  function fit() {
+    var vb = svg.viewBox.baseVal;
+    scale = Math.min(2, (stage.clientWidth - 48) / vb.width, (stage.clientHeight - 48) / vb.height);
+    apply();
+  }
+
+  dlg.querySelector('.zoom-bar').addEventListener('click', function (e) {
+    var z = e.target.closest('button');
+    if (!z) return;
+    if (z.dataset.z === 'in') { scale *= 1.25; apply(); }
+    if (z.dataset.z === 'out') { scale /= 1.25; apply(); }
+    if (z.dataset.z === 'fit') fit();
+    if (z.dataset.z === 'close') dlg.close();
+  });
+  // Trackpad pinch / Ctrl + scroll zooms; plain scroll pans.
+  stage.addEventListener('wheel', function (e) {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    scale *= e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    apply();
+  }, { passive: false });
+  // Click on the dark backdrop closes it.
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+
+  document.querySelectorAll('.mermaid').forEach(function (box) {
+    var src = box.querySelector('svg');
+    if (!src) return;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'zoom-btn';
+    btn.textContent = '⤢ 放大';
+    btn.setAttribute('aria-label', '放大檢視這張圖');
+    btn.addEventListener('click', function () {
+      svg = src.cloneNode(true);
+      svg.removeAttribute('style');
+      baseW = svg.viewBox.baseVal.width;
+      stage.replaceChildren(svg);
+      dlg.showModal();
+      fit();
+    });
+    box.appendChild(btn);
+  });
+}
+</script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
 <script>
 // Convert pandoc <pre class="mermaid"> blocks into live divs, then render.
@@ -47,7 +115,7 @@ if (window.mermaid) {
       attributeBackgroundColorEven: '#f6f3f1'
     }
   });
-  mermaid.run({ querySelector: '.mermaid' }).catch(function (e) {
+  mermaid.run({ querySelector: '.mermaid' }).then(addZoom).catch(function (e) {
     console.warn('mermaid render failed', e);
   });
 }
