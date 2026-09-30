@@ -1,3 +1,13 @@
+<script>
+  /* Fonts are linked at runtime on purpose: a <link> or @import would be inlined by
+     pandoc --embed-resources, and Noto Serif TC alone adds ~13 MB to the page. */
+  (function () {
+    var l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@400&display=swap';
+    document.head.appendChild(l);
+  })();
+</script>
 <div class="announce">
   <span>{{ANNOUNCE_LEFT}}</span>
   <span class="pill">{{ANNOUNCE_PILL}}</span>

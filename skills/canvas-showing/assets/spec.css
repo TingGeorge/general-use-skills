@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@400&display=swap');
-
 :root {
   --color-parchment: #f6f3f1;
   --color-lake-blue: #2b59d1;
@@ -253,10 +251,18 @@ pre code {
   font-size: inherit;
   color: var(--color-off-black);
 }
-pre code .kw, pre code .dt { color: var(--color-lake-blue); }
-pre code .st { color: #2e6e63; }
-pre code .co { color: var(--color-smoke); }
-pre code .ot, pre code .fu { color: var(--color-graphite); }
+/* Pandoc's --highlight-style paints the square div.sourceCode wrapper (breezedark: #232629),
+   which shows as dark corners behind the rounded pre. Neutralize it, then reset every token
+   colour so only the Monad palette below applies, whatever highlight style was picked. */
+div.sourceCode { background: transparent; color: inherit; }
+pre.sourceCode code span { color: inherit; background: none; font-weight: inherit; font-style: inherit; }
+pre.sourceCode code span.kw, pre.sourceCode code span.dt, pre.sourceCode code span.ex,
+pre.sourceCode code span.bu, pre code .kw, pre code .dt { color: var(--color-lake-blue); }
+pre.sourceCode code span.st, pre.sourceCode code span.ss, pre.sourceCode code span.ch,
+pre.sourceCode code span.vs, pre code .st { color: #2e6e63; }
+pre.sourceCode code span.co, pre.sourceCode code span.cv, pre.sourceCode code span.do,
+pre.sourceCode code span.an, pre code .co { color: var(--color-smoke); }
+pre.sourceCode code span.ot, pre.sourceCode code span.fu, pre code .ot, pre code .fu { color: var(--color-graphite); }
 
 /* ---------- tables ---------- */
 table {
@@ -336,3 +342,6 @@ hr {
 .zoom-bar output { font: 13px var(--font-mono); min-width: 52px; text-align: center; color: var(--color-graphite); }
 .zoom-stage { flex: 1; overflow: auto; padding: 24px; display: grid; }
 .zoom-stage svg { margin: auto; max-width: none !important; height: auto; }
+
+/* Long URLs (e.g. Figma links) must wrap instead of overflowing the column. */
+.content a { overflow-wrap: anywhere; }
