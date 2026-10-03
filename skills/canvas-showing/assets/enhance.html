@@ -1,0 +1,424 @@
+<style>
+[hidden] { display: none !important; }
+
+/* ---------- headings in paged mode: less dead space under the sticky header ---------- */
+main.content h2 { font-size: 36px; margin: 8px 0 24px; }
+main.content h3 { font-size: 24px; margin: 28px 0 14px; }
+main.content h2 + h3 { margin-top: 8px; }
+
+/* ---------- inline markers ---------- */
+.refs { white-space: normal; }
+.card, .blocks > li, .sx, .steps, .kn { overflow-wrap: anywhere; min-width: 0; }
+.ref, .mk {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 8px; margin: 0 2px;
+  font-size: 11px; line-height: 1; letter-spacing: .02em; border-radius: 999px;
+  vertical-align: .12em; white-space: nowrap;
+}
+.ref { border: 1px solid var(--color-ash); color: var(--color-smoke); background: rgba(255, 255, 255, .5); }
+.ref.r { border-color: var(--color-sky-blue); color: var(--color-lake-blue); }
+.mk.y { background: var(--color-gold); color: var(--color-off-black); }
+.mk.o { border: 1px dashed var(--color-graphite); color: var(--color-graphite); background: #fff; }
+.claude-note, .open-note {
+  border-radius: 6px; padding: 1px 3px 1px 2px; font-size: .94em;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+.claude-note { background: rgba(236, 218, 152, .32); }
+.open-note { background: rgba(78, 77, 77, .06); }
+.claude-note > .mk:first-child, .open-note > .mk:first-child { margin: 0 6px 0 0; }
+i.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: .05em; }
+i.dot.y { background: var(--color-gold); }
+i.dot.o { border: 1px dashed var(--color-graphite); }
+
+/* ---------- wide layout: the column fills the space between sidebar and drawer ---------- */
+@media (min-width: 1080px) {
+  main.content { max-width: 1400px; }
+  .page { padding-left: 40px; padding-right: 40px; }
+}
+
+/* ---------- cards (from tables) ---------- */
+/* grids follow the width the content actually has (sidebar / source drawer open), not the window */
+main.content { container-type: inline-size; container-name: doc; }
+.cards { display: grid; gap: 14px; margin: 20px 0 28px; }
+@container doc (min-width: 560px) { .cards.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container doc (min-width: 1040px) { .cards.cols-2 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container doc (min-width: 1000px) { .cards.cols-1 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.card {
+  position: relative;
+  border: 1px solid var(--color-ash); border-radius: 20px; padding: 18px 20px 20px;
+  background: rgba(255, 255, 255, .5); display: flex; flex-direction: column; gap: 10px;
+}
+.card.deleted { opacity: .55; border-style: dashed; background: transparent; }
+.card header { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 10px; }
+.card header:has(.src-btn) { padding-right: 62px; }
+.card header h4 { flex: 1 1 8em; }
+.card .cid, .card .tag {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px;
+  font-size: 12px; white-space: nowrap; flex: none; margin-top: 2px;
+}
+.card .cid { font-weight: 500; color: #fff; background: var(--color-lake-blue); }
+.card .cid { height: auto; min-height: 24px; padding: 3px 10px; white-space: normal; max-width: 42%; line-height: 1.4; }
+.card .tag.ext { background: var(--color-mint); color: var(--color-off-black); }
+.card .tag.new { background: var(--color-periwinkle-mist); color: var(--color-lake-blue); }
+.card h4 {
+  margin: 0; font-family: var(--font-serif); font-weight: 400; font-size: 19px; line-height: 1.4;
+  color: var(--color-ink); flex: 1 1 auto; min-width: 0;
+}
+.card .field { font-size: 14.5px; line-height: 1.7; padding-right: 4px; }
+.card header.long { flex-wrap: wrap; }
+.card header.long h4 { flex-basis: 100%; order: 3; }
+.card header.long .cid { max-width: none; }
+.card .field + .field { margin-top: 8px; }
+.card .flabel { display: block; font-size: 11px; letter-spacing: .12em; color: var(--color-smoke); margin-bottom: 2px; }
+.card.before-after h4 { color: var(--color-graphite); font-size: 17px; }
+.card.before-after h4::before {
+  content: attr(data-before); display: block; width: max-content; margin-bottom: 4px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; color: var(--color-smoke);
+}
+.card.before-after .cbody { background: rgba(207, 218, 245, .35); border-radius: 14px; padding: 10px 14px; }
+.card.before-after .cbody::before {
+  content: attr(data-after); display: block; margin-bottom: 2px; font-size: 11px; letter-spacing: .12em; color: var(--color-lake-blue);
+}
+
+/* ---------- blocks (from bullet lists): same shape as cards ---------- */
+.blocks { list-style: none; padding: 0; margin: 20px 0 28px; display: grid; gap: 12px; }
+@container doc (min-width: 560px) { .blocks.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container doc (min-width: 1040px) { .blocks.cols-2 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container doc (min-width: 1000px) { .blocks.cols-1 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.blocks > li {
+  margin: 0; border: 1px solid var(--color-ash); border-radius: 20px; padding: 14px 18px;
+  font-size: 14.5px; line-height: 1.7; background: rgba(255, 255, 255, .5);
+}
+ol.blocks { counter-reset: blk; }
+ol.blocks > li { counter-increment: blk; padding-left: 58px; position: relative; }
+ol.blocks > li::before {
+  content: counter(blk); position: absolute; left: 18px; top: 12px;
+  font-family: var(--font-serif); font-size: 26px; line-height: 1; color: var(--color-lake-blue);
+}
+
+/* ---------- steps (from "A → B → C" chains) ---------- */
+.steps { margin: 16px 0 26px; }
+.steps-title { font-family: var(--font-serif); font-size: 20px; margin-bottom: 12px; color: var(--color-ink); }
+/* vertical chain: block, arrow down, next block */
+.step-chain { list-style: none; padding: 0; margin: 0; counter-reset: st; }
+.step-chain > li {
+  counter-increment: st; position: relative; margin: 0 0 36px; min-height: 50px;
+  border: 1px solid var(--color-ash); border-radius: 16px; background: rgba(255, 255, 255, .55);
+  padding: 12px 18px 12px 54px; font-size: 14.5px; line-height: 1.65;
+}
+.step-chain > li:last-child { margin-bottom: 0; }
+.step-chain > li::before {
+  content: counter(st); position: absolute; left: 14px; top: 12px; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--color-lake-blue); color: #fff; font-size: 12px; line-height: 1; display: grid; place-items: center;
+}
+.step-chain > li:not(:last-child)::after {
+  content: ''; position: absolute; left: 50%; bottom: -31px; width: 14px; height: 26px; margin-left: -7px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='26' viewBox='0 0 14 26'%3E%3Cpath d='M7 1v22M1.5 17.5 7 23l5.5-5.5' fill='none' stroke='%232b59d1' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center;
+}
+.steps-tail { margin-top: 20px; }
+/* a chain drawn as a diagram: the diagram fills the block; the 原文 button sits on the title row or the frame */
+.steps.as-diagram > .mermaid { margin: 0; }
+.steps.as-diagram:not(:has(> .steps-title)) > .src-btn.flt { top: 14px; }
+/* the right edge belongs to 原文 buttons, so 「⤢ 放大」 moves to the top-left of every diagram */
+.mermaid .zoom-btn { left: 18px; right: auto; top: 14px; }
+/* the chain keeps the full width: its 原文 button sits in the title row, or inside the first block */
+.steps { position: relative; }
+.steps > .src-btn.flt { position: absolute; top: 12px; right: 19px; float: none; margin: 0; }
+.steps > .steps-title { padding-right: 76px; }
+.steps > .src-btn.flt:has(+ .steps-title) { top: 0; }
+.steps:not(:has(> .steps-title)) > .step-chain > li:first-child { padding-right: 82px; }
+/* inline code pills: short ones never split across lines, long ones wrap with both ends rounded */
+main.content :not(pre) > code { overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+main.content code.nw { white-space: nowrap; }
+ul.has-steps { list-style: none; padding: 0; margin: 0; }
+ul.has-steps > li { margin: 0; padding: 4px 0; position: relative; }
+ul.has-steps > li > .steps { margin-top: 0; }
+ul.has-steps > li + li { border-top: 1px solid var(--color-ash); padding-top: 18px; }
+/* a list of flows (4.5): side by side when there is room (after the rules above, so it wins) */
+@container doc (min-width: 1040px) {
+  ul.has-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 40px; align-items: start; }
+  ul.has-steps > li + li { border-top: 0; padding-top: 4px; }
+}
+/* the 原文 button of a flow sits on its title row, at the same right inset as everywhere else */
+ul.has-steps > li > .src-btn.flt { position: absolute; top: 5px; right: 19px; margin: 0; }
+@container doc (max-width: 1039px) { ul.has-steps > li + li > .src-btn.flt { top: 19px; } }
+/* room above every diagram for its 「⤢ 放大」 button */
+main.content .mermaid { padding-top: 60px; }
+
+/* ---------- number tiles ---------- */
+.keynums, .stats { display: grid; gap: 12px; margin: 20px 0 32px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container doc (min-width: 560px) { .keynums, .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container doc (min-width: 900px) { .keynums { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container doc (min-width: 1000px) { .stats { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.keynums::before {
+  content: attr(data-title); grid-column: 1 / -1; font-size: 12px; letter-spacing: .14em; color: var(--color-smoke);
+}
+.kn { border: 1px solid var(--color-ash); border-radius: 20px; padding: 16px 18px; background: rgba(255, 255, 255, .5); }
+.kn-label { font-size: 12px; color: var(--color-smoke); letter-spacing: .06em; }
+.kn-value { font-family: var(--font-serif); font-size: 26px; line-height: 1.25; color: var(--color-lake-blue); margin: 6px 0 4px; }
+.kn-note { font-size: 12.5px; line-height: 1.5; color: var(--color-graphite); }
+.stats .kn-value { font-size: 32px; }
+
+/* ---------- structured text (clauses) ---------- */
+.sx { margin: 12px 0 20px; }
+.sx-title { font-family: var(--font-serif); font-size: 18px; color: var(--color-ink); margin-bottom: 8px; }
+.card .sx-title, .blocks .sx-title { font-size: 16px; }
+ul.sx-list { list-style: none; padding: 0; margin: 0; }
+.sx-list > li { position: relative; padding-left: 18px; margin: 3px 0; line-height: 1.7; }
+.sx-list > li::before {
+  content: ''; position: absolute; left: 3px; top: .72em; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--color-lake-blue); opacity: .55;
+}
+.sx-list > li.ns { margin-top: 10px; }
+.sx-lbl { color: var(--color-lake-blue); font-weight: 500; }
+blockquote .sx { margin: 6px 0 12px; }
+</style>
+<script>
+// Enhance: turn text-heavy markdown into cards, step chains and chips — without dropping any text.
+(function () {
+  var main = document.querySelector('main.content');
+  var C = window.CANVAS || {};
+  var esc = function (t) { return t.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+  var rx = function (s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); };
+
+  // ---- 1. inline markers (config.html): reference codes in brackets → chips, note marks → highlighted notes
+  var refs = C.refs, REFS, TAIL;
+  if (refs) {
+    REFS = new RegExp('[（(]((?:' + refs.code + ')(?:[、，,]\\s*(?:' + refs.code + '))*)[）)]', 'g');
+    // trailing codes inside a mixed parenthesis: （不要求…，D-12）
+    TAIL = new RegExp('([，、])\\s*((?:' + refs.code + ')(?:[、，,]\\s*(?:' + refs.code + '))*)(?=[）)])', 'g');
+  }
+  function refChips(list) {
+    var prev = null;
+    return '<span class="refs">' + list.split(/[、，,]\s*/).map(function (c) {
+      var k = prev = refs.chip(c, prev) || { cls: '', title: '' };
+      return '<span class="ref ' + k.cls + '" title="' + esc(k.title) + '">' + c + '</span>';
+    }).join('') + '</span>';
+  }
+  var NOTES = C.notes || [], stats = {};
+  NOTES.forEach(function (n) { stats[n.cls] = 0; });
+  var marks = NOTES.map(function (n) { return n.mark; }).join('');
+  if (marks || refs) main.querySelectorAll('p, li, td, th').forEach(function (el) {
+    if (el.closest('.mermaid, pre, .keynums') || el.querySelector('p, ul, ol, table')) return;
+    var h = el.innerHTML;
+    if (!new RegExp('[' + rx(marks) + '（(]', 'u').test(h)) return;
+    var c = el.closest('blockquote') ? 0 : 1;   // the marker legend is not a real marker
+    NOTES.forEach(function (n) {
+      var m = rx(n.mark), box = n.cls === 'y' ? 'claude-note' : 'open-note';
+      var mk = function () { stats[n.cls] += c; return '<span class="mk ' + n.cls + '">' + n.flag + '</span>'; };
+      h = h.replace(new RegExp(m + '\\s*〔([^〕]*)〕', 'gu'), function (_, t) { stats[n.cls] += c; return '<span class="' + box + '"><span class="mk ' + n.cls + '">' + n.note + '</span>' + t + '</span>'; })
+           .replace(new RegExp(m + '\\s*' + rx(n.flag), 'gu'), mk)
+           .replace(new RegExp(m + '(?![^<]*<\\/span>)', 'gu'), mk);
+    });
+    if (refs) h = h.replace(REFS, function (_, list) { return refChips(list); })
+                   .replace(TAIL, function (_, sep, list) { return sep + refChips(list); });
+    el.innerHTML = h;
+  });
+
+  // GFM leaves **bold** literal when it closes after punctuation and a CJK character follows: 「**詞（X）**後文」
+  main.querySelectorAll('p, li, td, th').forEach(function (el) {
+    if (el.closest('.mermaid, pre') || el.querySelector('p, ul, ol, table, code') || el.innerHTML.indexOf('**') < 0) return;
+    el.innerHTML = el.innerHTML.replace(/\*\*([^*<>]+?)\*\*/g, '<strong>$1</strong>');
+  });
+
+  main.querySelectorAll('code').forEach(function (c) { if (!c.closest('pre') && c.textContent.length <= 24) c.classList.add('nw'); });
+
+  // ---- 2. "A → B → C" chains → numbered steps (arrows inside 「」 or tags are not split)
+  function splitArrows(html) {
+    var out = [], buf = '', q = 0, tag = 0;
+    for (var i = 0; i < html.length; i++) {
+      var c = html[i];
+      if (c === '<') tag++; else if (c === '>') tag--;
+      else if (c === '「') q++; else if (c === '」') q--;
+      if (c === '→' && !q && !tag) { out.push(buf.trim()); buf = ''; continue; }
+      buf += c;
+    }
+    out.push(buf.trim());
+    return out.filter(Boolean);
+  }
+  function stepsHTML(parts, title, tail) {
+    var list = '<ol class="step-chain">' + parts.map(function (p) { return '<li>' + p + '</li>'; }).join('') + '</ol>';
+    return '<div class="steps">' + (title ? '<div class="steps-title">' + title + '</div>' : '') + list +
+      (tail ? '<div class="steps-tail">' + tail + '</div>' : '') + '</div>';
+  }
+  // text after the sentence that holds the last arrow is not a step: keep it under the chain
+  function splitTail(html) {
+    var last = -1, q = 0, tag = 0, i, c;
+    for (i = 0; i < html.length; i++) {
+      c = html[i];
+      if (c === '<') tag++; else if (c === '>') tag--;
+      else if (c === '「') q++; else if (c === '」') q--;
+      else if (c === '→' && !q && !tag) last = i;
+    }
+    var br = 0; tag = 0;
+    for (i = last + 1; last >= 0 && i < html.length; i++) {
+      c = html[i];
+      if (c === '<') tag++; else if (c === '>') tag--;
+      else if ('「（(〔'.indexOf(c) >= 0) br++; else if ('」）)〕'.indexOf(c) >= 0) br = Math.max(0, br - 1);
+      else if (c === '。' && !br && !tag) {
+        var rest = html.slice(i + 1);
+        return rest.replace(/<[^>]+>/g, '').trim() ? [html.slice(0, i + 1), rest.trim()] : [html, ''];
+      }
+    }
+    return [html, ''];
+  }
+  [].forEach.call(main.querySelectorAll('main.content > p, main.content > ul > li'), function (el) {
+    var split = splitTail(el.innerHTML);
+    var parts = splitArrows(split[0]);
+    if (parts.length < 3) return;
+    var title = '';
+    var m = /^<strong>([\s\S]*?)<\/strong>[：:]\s*/.exec(parts[0]);
+    if (m) { title = m[1]; parts[0] = parts[0].slice(m[0].length); }
+    var div = document.createElement('div');
+    div.innerHTML = stepsHTML(parts, title, split[1]);
+    if (el.tagName === 'LI') { el.innerHTML = div.innerHTML; el.parentNode.classList.add('has-steps'); }
+    else { if (el.dataset.src) div.firstChild.dataset.src = el.dataset.src; el.replaceWith(div.firstChild); }
+  });
+
+  // a diagram marked "%% steps-of: <title>" redraws a step chain with the same words: it takes the
+  // chain's place (title, tail text and 原文 button stay), so the flow is shown once, as a diagram
+  var srcMap = JSON.parse(document.getElementById('src-map').textContent);
+  main.querySelectorAll('main.content > .mermaid[data-src]').forEach(function (dg) {
+    var r = dg.dataset.src.split('-').map(Number);
+    var mk = srcMap.src.slice(r[0], r[1] + 1).join('\n').match(/%% steps-of: (.+)/);
+    if (!mk) return;
+    var steps = null, prev = dg.previousElementSibling;
+    if (mk[1] === '(previous)') steps = prev && prev.classList.contains('steps') ? prev : null;
+    else {
+      while (prev && !prev.matches('ul.has-steps')) prev = prev.previousElementSibling;
+      [].some.call(prev ? prev.querySelectorAll('.steps-title') : [], function (t) {
+        if (t.textContent.replace(/\s+/g, ' ').trim() === mk[1]) { steps = t.parentNode; return true; }
+      });
+    }
+    if (!steps) return console.warn('steps-of: no chain for', mk[1]);
+    steps.querySelector('.step-chain').replaceWith(dg);
+    steps.classList.add('as-diagram');
+  });
+
+  // ---- 3. tables → card grids
+  main.querySelectorAll('main.content > table').forEach(function (table) {
+    var heads = [].map.call(table.tHead ? table.tHead.rows[0].cells : [], function (c) { return c.textContent.trim(); });
+    var rows = [].slice.call(table.tBodies[0].rows);
+    var idCol = rows.every(function (r) { return (C.idCol || /^[A-Z]{1,4}-?\d+(?:[.-]\d+)*$/).test(r.cells[0].textContent.trim()); });
+    var ba = C.beforeAfter, beforeAfter = !!ba && heads[0] === ba.head;
+    var grid = document.createElement('div');
+    var lens = rows.map(function (r) { return r.textContent.length; });
+    var avg = lens.reduce(function (a, b) { return a + b; }, 0) / lens.length;
+    var cols = avg < 150 && heads.length <= 3 ? 2 : 1;
+    grid.className = 'cards cols-' + cols;
+
+    rows.forEach(function (r, ri) {
+      var cells = [].slice.call(r.cells);
+      var card = document.createElement('article');
+      card.className = 'card';
+      var hd = '<header>', bodyCells, bodyHeads;
+      if (idCol) {
+        var id = cells[0].textContent.trim();
+        if (id.length > 12) hd = '<header class="long">';
+        hd += '<span class="cid">' + esc(id) + '</span>';
+        // config.html may tag cards by id: [{ cls: 'ext' | 'new', text }]
+        (C.cardTags ? C.cardTags(id, +(/\d+/.exec(id) || [0])[0]) || [] : []).forEach(function (t) {
+          if (t.cls === 'ext') card.classList.add('ext');
+          hd += '<span class="tag ' + t.cls + '">' + t.text + '</span>';
+        });
+        hd += '<h4>' + (cells[1] ? cells[1].innerHTML : '') + '</h4>';
+        bodyCells = cells.slice(2); bodyHeads = heads.slice(2);
+      } else {
+        hd += '<h4>' + cells[0].innerHTML + '</h4>';
+        bodyCells = cells.slice(1); bodyHeads = heads.slice(1);
+      }
+      hd += '</header>';
+      if ((C.deleted || /已刪除/).test(cells[idCol ? 1 : 0].textContent)) card.classList.add('deleted');
+      if (beforeAfter) card.classList.add('before-after');
+      var showLabels = !beforeAfter && (idCol || bodyCells.length > 1);
+      var body = '<div class="cbody">' + bodyCells.map(function (c, i) {
+        return '<div class="field">' + (showLabels ? '<span class="flabel">' + esc(bodyHeads[i] || '') + '</span>' : '') + '<div class="fv">' + c.innerHTML + '</div></div>';
+      }).join('') + '</div>';
+      card.innerHTML = hd + body;
+      if (beforeAfter) { card.querySelector('h4').dataset.before = ba.before; card.querySelector('.cbody').dataset.after = ba.after; }
+      if (r.dataset.src) card.dataset.src = r.dataset.src;
+      grid.appendChild(card);
+    });
+    table.replaceWith(grid);
+  });
+
+  // ---- 4. plain bullet lists → blocks
+  main.querySelectorAll('main.content > ul:not(.has-steps), main.content > ol').forEach(function (list) {
+    var items = [].slice.call(list.children);
+    if (items.length < 2) return;
+    var avg = items.reduce(function (a, li) { return a + li.textContent.length; }, 0) / items.length;
+    var cols = avg < 70 ? 2 : 1;
+    list.classList.add('blocks', 'cols-' + cols);
+  });
+
+  // ---- 4b. dense text → structured list: one item per clause, sentence breaks kept.
+  // Splits only on top-level 。 and ；; never inside 「」（）〔〕 or inside any tag (bold, notes, chips).
+  function splitTop(html, delim) {
+    var out = [], buf = '', br = 0, tag = 0;
+    for (var i = 0; i < html.length; i++) {
+      var c = html[i];
+      if (c === '<') {
+        var end = html.indexOf('>', i), t = html.slice(i, end + 1);
+        if (t[1] === '/') tag--;
+        else if (!/\/>$|^<(br|img|hr|wbr)\b/i.test(t)) tag++;
+        buf += t; i = end; continue;
+      }
+      if ('「（(〔『'.indexOf(c) >= 0) br++;
+      else if ('」）)〕』'.indexOf(c) >= 0) br = Math.max(0, br - 1);
+      if (c === delim && !br && !tag) { out.push(buf); buf = ''; continue; }
+      buf += c;
+    }
+    out.push(buf);
+    return out.map(function (x) { return x.trim(); }).filter(function (x) { return x.replace(/<[^>]+>/g, '').trim(); });
+  }
+  function label(h) {
+    // a short plain lead such as「例：」「依據：」 gets highlighted
+    return h.replace(/^([^<：。；]{1,10})：/, '<b class="sx-lbl">$1</b>：');
+  }
+  function structure(el) {
+    var html = el.innerHTML.trim(), title = '';
+    var m = /^<strong>([^<]*?)。?<\/strong>(?:[：:]\s*)?/.exec(html);
+    if (m && (/。<\/strong>/.test(m[0]) || /[：:]/.test(m[0]))) { title = m[1]; html = html.slice(m[0].length); }
+    var items = [];
+    splitTop(html, '。').forEach(function (sent, si) {
+      splitTop(sent, '；').forEach(function (cl, ci) { items.push({ h: cl, ns: si > 0 && ci === 0 }); });
+    });
+    if (items.length < 2 && !title) { el.innerHTML = el.innerHTML.replace(/。\s*$/, ''); return 0; }
+    if (el.textContent.length < 50 && !title) return 0;
+    el.innerHTML = (title ? '<div class="sx-title">' + title + '</div>' : '') +
+      (items.length === 1 ? '<div>' + items[0].h + '</div>' :
+      '<ul class="sx-list">' + items.map(function (it) {
+        return '<li' + (it.ns ? ' class="ns"' : '') + '>' + label(it.h) + '</li>';
+      }).join('') + '</ul>');
+    return items.length;
+  }
+  main.querySelectorAll('.card .fv, .blocks > li, .step-chain > li, .steps-tail').forEach(function (el) {
+    if (!el.querySelector('ul, ol, table, .mermaid')) structure(el);
+  });
+  main.querySelectorAll('main.content > p, main.content > blockquote > p').forEach(function (p) {
+    if (p.querySelector('img, .mermaid') || p.closest('.keynums')) return;
+    var div = document.createElement('div');
+    div.className = 'sx';
+    div.innerHTML = p.innerHTML;
+    var k = structure(div);
+    if (!k) return;
+    if (p.dataset.src) div.dataset.src = p.dataset.src;
+    p.replaceWith(div);
+  });
+
+  // ---- 5. overview tiles on the first page: [label, value, note, kind]; config.html may replace them
+  var n = function (sel) { return main.querySelectorAll(sel).length; };
+  var cids = [].map.call(main.querySelectorAll('.card .cid'), function (c) { return c; });
+  var tiles = C.tiles ? C.tiles({ n: n, cids: cids, stats: stats }) : [
+    ['章節', n('main.content > h2') + ' 章', n('main.content > h3') + ' 個小節'],
+    ['卡片', n('.card') + ' 張', '由表格整理而成'],
+    ['圖表', n('.mermaid') + ' 張', '流程、狀態、關係；可點「⤢ 放大」']
+  ].concat(NOTES.map(function (nt) { return ['<i class="dot ' + nt.cls + '"></i>' + nt.flag, stats[nt.cls] + ' 處', nt.meaning || '', nt.cls === 'o' ? 'open' : 'confirm']; }));
+  var box = document.createElement('div');
+  box.className = 'stats';
+  box.innerHTML = tiles.map(function (t) {
+    return '<div class="kn"' + (t[3] ? ' data-kind="' + t[3] + '"' : '') + '><div class="kn-label">' + t[0] + '</div><div class="kn-value">' + t[1] + '</div><div class="kn-note">' + t[2] + '</div></div>';
+  }).join('');
+  var h1 = main.querySelector('main.content > h1');
+  (h1 || main.firstElementChild).after(box);
+})();
+</script>

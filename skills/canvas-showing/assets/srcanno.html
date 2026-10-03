@@ -1,0 +1,19 @@
+<script>
+// Tag every top-level block (and table row / list item) with the source.md lines it came from.
+// Runs before enhance.html, which carries data-src over to the cards and blocks it builds.
+(function () {
+  var map = JSON.parse(document.getElementById('src-map').textContent);
+  var main = document.querySelector('main.content');
+  var els = [].filter.call(main.children, function (el) { return el.id !== 'title-block-header' && el.id !== 'TOC'; });
+  var KIND = { h: /^H[1-6]$/, p: /^P$/, list: /^(UL|OL)$/, table: /^TABLE$/, quote: /^BLOCKQUOTE$/, fence: /^(DIV|PRE)$/, html: /^DIV$/, hr: /^HR$/ };
+  if (els.length !== map.blocks.length) console.warn('source map: block count differs', els.length, map.blocks.length);
+  for (var i = 0; i < Math.min(els.length, map.blocks.length); i++) {
+    var b = map.blocks[i], el = els[i];
+    // stop at the first mismatch: no source is better than the wrong source
+    if (!KIND[b.kind].test(el.tagName)) { console.warn('source map: mismatch at block', i, b.kind, el.tagName); break; }
+    el.dataset.src = b.s + '-' + b.e;
+    var parts = b.kind === 'table' ? (el.tBodies[0] ? el.tBodies[0].rows : []) : b.kind === 'list' ? el.children : null;
+    if (parts && b.items) [].forEach.call(parts, function (p, k) { if (b.items[k]) p.dataset.src = b.items[k][0] + '-' + b.items[k][1]; });
+  }
+})();
+</script>

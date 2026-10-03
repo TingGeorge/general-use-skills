@@ -1,0 +1,59 @@
+<script>
+// 找點事 PRD v3.1 — every document-specific rule of the page lives here.
+window.CANVAS = {
+  agent: 'Claude',
+
+  // (R:C-29、D-12、C-05) in brackets → chips; "R:A-1.4、A-1.6": a bare code after an R: code is also an R answer
+  refs: {
+    code: '(?:R:)?[A-D]-[\\d.]+(?:～[A-D]?-?[\\d.]+)?',
+    chip: function (c, prev) {
+      if (c.indexOf('R:') === 0 || (prev && prev.r && /^[A-C]-/.test(c))) return { cls: 'r', r: true, title: 'response_v3 的回答' };
+      return c[0] === 'D' ? { cls: 'd', title: 'rules_v3 的決策' } : { cls: 'c', title: 'DESIGN_CONFLICTS 編號' };
+    },
+    legend: [['r', 'R:C-29', 'response_v3 的回答'], ['d', 'D-12', 'rules_v3 的決策'], ['c', 'C-05', 'DESIGN_CONFLICTS 編號']]
+  },
+
+  // 🟡〔…〕 / ⬜〔…〕 → highlighted notes; a bare 🟡 / ⬜ → a flag chip
+  notes: [
+    { mark: '🟡', cls: 'y', note: 'Claude 補充', flag: '需確認', meaning: 'Claude 自行補上或解讀的內容' },
+    { mark: '⬜', cls: 'o', note: '待決', flag: '待決', legend: '還沒決定', meaning: '還沒決定、需要團隊決定的地方' }
+  ],
+
+  idCol: /^(F\d+|AC\d+|[A-D]-[\d.]+.*)$/,
+  cardTags: function (id, n) {
+    if (/^F/.test(id) && n >= 13) return [{ cls: 'ext', text: '延伸功能' }];
+    if (/^AC/.test(id) && n >= 67) return [{ cls: 'new', text: 'v3.1 新增' }];
+  },
+  beforeAfter: { head: '原構想', before: '原本', after: '本版' },
+
+  kinds: {
+    goal: ['目標與使用者', 'pink'], feature: ['功能', 'teal'], out: ['不納入本版', 'gray'], rule: ['規則與需求', 'blue'],
+    flow: ['流程與畫面', 'violet'], state: ['狀態', 'cyan'], tech: ['資料與技術', 'slate'], design: ['非功能與設計建議', 'orange'],
+    ac: ['驗收條件', 'green'], metric: ['衡量指標', 'olive'], open: ['待決', 'red'], trace: ['追溯', 'purple'], log: ['回答紀錄', 'brown']
+  },
+  kindOf: function (h2, h3) {
+    var n = (h3 || h2 || '').replace(/\s+/g, ' ').trim();
+    var m = /^(\d+)(?:\.(\d+))?/.exec(n);
+    if (/^附錄/.test(n)) return 'log';
+    if (!m) return '';
+    var a = +m[1], b = m[2] ? +m[2] : 0;
+    if (a === 1) return 'goal';
+    if (a === 2) return b === 2 ? 'out' : 'feature';
+    if (a === 3 || a === 5) return 'rule';
+    return { 4: 'flow', 6: 'state', 7: 'tech', 8: 'design', 9: 'ac', 10: 'metric', 11: 'open', 12: 'trace' }[a] || '';
+  },
+
+  tiles: function (x) {
+    var ac = x.cids.filter(function (c) { return /^AC/.test(c.textContent); });
+    var del = ac.filter(function (c) { return c.closest('.deleted'); }).length;
+    var feats = x.cids.filter(function (c) { return /^F\d/.test(c.textContent); }).length;
+    return [
+      ['功能', feats + ' 項', '核心 F01–F12，延伸 F13–F19', 'feature'],
+      ['驗收條件', (ac.length - del) + ' 條', '編號 AC01–AC' + ac.length + '，其中 ' + del + ' 條已刪除', 'ac'],
+      ['圖表', x.n('.mermaid') + ' 張', '流程、狀態、資料關係；可點「⤢ 放大」', 'flow'],
+      ['<i class="dot y"></i>需全隊確認', x.stats.y + ' 處', 'Claude 自行補上或解讀的內容', 'confirm'],
+      ['<i class="dot o"></i>待決', x.stats.o + ' 處', '還沒決定、需要團隊決定的地方', 'open']
+    ];
+  }
+};
+</script>

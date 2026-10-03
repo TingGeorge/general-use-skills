@@ -1,0 +1,285 @@
+<style>
+:root { --drawer: 0px; }
+/* push the content aside only while it keeps >= ~400px; otherwise the drawer slides over it */
+@media (min-width: 1280px) { body.src-open { --drawer: 480px; } }
+@media (min-width: 1200px) { body.toc-collapsed.src-open { --drawer: 480px; } }
+body.src-open .page, body.src-open .announce, body.src-open .hero { margin-right: var(--drawer); }
+.page, .announce, .hero { transition: margin-left .25s ease, margin-right .25s ease; }
+
+/* "原文" buttons on blocks: quiet until the block is hovered / focused / open */
+.src-btn {
+  display: inline-flex; align-items: center; height: 26px; padding: 0 10px;
+  font: inherit; font-size: 11px; letter-spacing: .04em; line-height: 1; cursor: pointer;
+  color: var(--color-smoke); background: var(--color-parchment);
+  border: 1px solid var(--color-ash); border-radius: 999px; flex: none;
+}
+.src-btn:hover, .src-btn:focus-visible { color: var(--color-lake-blue); border-color: var(--color-lake-blue); }
+.src-btn.on { color: #fff; background: var(--color-lake-blue); border-color: var(--color-lake-blue); opacity: 1; }
+@media (hover: hover) {
+  [data-src] > .src-btn, [data-src] > header > .src-btn { opacity: .35; transition: opacity .15s; }
+  [data-src]:hover > .src-btn, [data-src]:hover > header > .src-btn,
+  [data-src]:focus-within > .src-btn, [data-src]:focus-within > header > .src-btn,
+  main.content .src-btn.on { opacity: 1; }
+}
+/* every 原文 button sits 19px in from the right edge of its block (18px inside a 1px border), so buttons line up down the page:
+   boxed blocks (cards, list blocks, steps) get it inside the box, plain text at the column edge minus 18px */
+.src-btn.flt { float: right; margin: 2px 19px 6px 12px; position: relative; z-index: 3; }
+.blocks > li > .src-btn.flt { margin-right: 0; }
+.card header .src-btn { position: absolute; top: 19px; right: 18px; z-index: 3; }
+blockquote[data-src] { position: relative; }
+blockquote > .src-btn.flt { position: absolute; top: 20px; right: 18px; margin: 0; }
+blockquote[data-src] > :first-of-type:not(.src-btn) { padding-right: 60px; }
+.src-host { position: relative; }
+.src-btn.abs { position: absolute; top: 10px; left: 10px; z-index: 2; }
+.keynums .src-btn.abs { left: auto; right: 0; top: -6px; }
+.pager-crumb .crumb-r { display: inline-flex; align-items: center; gap: 12px; white-space: nowrap; }
+.pager-crumb .src-btn { height: 30px; font-size: 12px; padding: 0 12px; opacity: 1; }
+
+/* right-side drawer */
+.src-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(480px, 100vw);
+  background: var(--color-parchment); border-left: 1px solid var(--color-ash);
+  display: flex; flex-direction: column;
+  transform: translateX(100%); visibility: hidden; transition: transform .25s ease, visibility .25s;
+}
+body.src-open .src-drawer { transform: none; visibility: visible; }
+.src-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--color-ash); display: flex; gap: 12px; align-items: flex-start; }
+.src-head .t { flex: 1; min-width: 0; }
+.src-head .k { font-size: 11px; letter-spacing: .14em; color: var(--color-smoke); }
+.src-head h2 {
+  margin: 4px 0 2px; font-family: var(--font-serif); font-weight: 400; font-size: 20px; line-height: 1.35;
+  border: 0; padding: 0; color: var(--color-ink); overflow-wrap: anywhere;
+}
+.src-head .where { font-size: 12px; color: var(--color-lake-blue); }
+.src-close {
+  font: inherit; font-size: 13px; cursor: pointer; background: transparent; color: var(--color-off-black);
+  border: 1px solid var(--color-ash); border-radius: 999px; padding: 10px 14px; min-height: 44px;
+}
+.src-close:hover { border-color: var(--color-lake-blue); color: var(--color-lake-blue); }
+.src-body { flex: 1; overflow: auto; padding: 16px 20px 40px; }
+.src-note {
+  font-size: 13px; line-height: 1.6; border: 1px dashed var(--color-smoke); border-radius: 14px;
+  padding: 10px 14px; margin-bottom: 14px;
+}
+.src-lines { margin: 0; font-family: var(--font-mono); font-size: 13px; line-height: 1.75; }
+.src-line { display: grid; grid-template-columns: 44px 1fr; gap: 10px; }
+.src-line .n { text-align: right; color: var(--color-smoke); user-select: none; }
+.src-line .x { white-space: pre-wrap; overflow-wrap: anywhere; }
+.src-line.blank .x::after { content: ' '; }
+
+/* rendered / raw switch */
+.src-mode { display: inline-flex; margin-top: 10px; border: 1px solid var(--color-ash); border-radius: 999px; padding: 2px; }
+.src-mode button {
+  font: inherit; font-size: 12px; cursor: pointer; border: 0; border-radius: 999px; padding: 5px 12px;
+  background: transparent; color: var(--color-smoke);
+}
+.src-mode button[aria-pressed="true"] { background: var(--color-lake-blue); color: #fff; }
+.src-mode button:not([aria-pressed="true"]):hover { color: var(--color-lake-blue); }
+
+/* rendered markdown: reads like a rendered document (proportional type); the raw view stays monospace */
+.src-md {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', 'Segoe UI', sans-serif;
+  font-size: 15px; line-height: 1.85; letter-spacing: .01em; color: var(--color-off-black); overflow-wrap: anywhere;
+}
+.src-md > :first-child { margin-top: 0; }
+.src-md p, .src-md ul, .src-md ol, .src-md blockquote, .src-md .tbl, .src-md pre { margin: 0 0 12px; }
+.src-md h1, .src-md h2, .src-md h3, .src-md h4 {
+  font-family: var(--font-serif); font-weight: 400; color: var(--color-ink); border: 0; padding: 0;
+  margin: 18px 0 8px; line-height: 1.4;
+}
+.src-md h1 { font-size: 22px; } .src-md h2 { font-size: 20px; } .src-md h3 { font-size: 18px; } .src-md h4 { font-size: 16px; }
+.src-md ul, .src-md ol { padding-left: 1.4em; }
+.src-md li { margin: 3px 0; }
+.src-md li::marker { color: var(--color-lake-blue); }
+.src-md strong { font-weight: 600; color: var(--color-ink); }
+.src-md a { color: var(--color-lake-blue); }
+.src-md code { font-family: var(--font-mono); font-size: .92em; background: rgba(78, 77, 77, .07); border-radius: 6px; padding: 1px 5px; }
+.src-md pre { background: rgba(78, 77, 77, .05); border: 1px solid var(--color-ash); border-radius: 12px; padding: 10px 12px; overflow-x: auto; }
+.src-md pre code { background: none; padding: 0; }
+.src-md blockquote { border-left: 3px solid var(--color-sky-blue); padding: 2px 0 2px 12px; color: var(--color-graphite); }
+.src-md hr { border: 0; border-top: 1px solid var(--color-ash); margin: 16px 0; }
+.src-md .tbl { overflow-x: auto; border: 1px solid var(--color-ash); border-radius: 12px; }
+.src-md table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 1.65; margin: 0; }
+.src-md th, .src-md td { border-bottom: 1px solid var(--color-ash); padding: 7px 10px; text-align: left; vertical-align: top; }
+.src-md th + th, .src-md td + td { border-left: 1px solid var(--color-ash); }
+.src-md tr:last-child td { border-bottom: 0; }
+.src-md th { background: var(--color-periwinkle-mist); font-weight: 500; color: var(--color-ink); white-space: nowrap; }
+.src-ctx { font-size: 12px; color: var(--color-smoke); margin: -4px 0 12px; }
+</style>
+<aside class="src-drawer" role="dialog" aria-modal="false" aria-labelledby="src-title" tabindex="-1">
+  <div class="src-head">
+    <div class="t">
+      <div class="k">原文 · SOURCE</div>
+      <h2 id="src-title"></h2>
+      <div class="where"></div>
+      <div class="src-mode" role="group" aria-label="顯示方式">
+        <button type="button" data-mode="md" aria-pressed="true">排版後</button>
+        <button type="button" data-mode="raw" aria-pressed="false">Markdown 原始碼</button>
+      </div>
+    </div>
+    <button type="button" class="src-close" aria-label="關閉原文">✕ 關閉</button>
+  </div>
+  <div class="src-body"></div>
+</aside>
+<script>
+// "原文" buttons: open a right-side drawer with the exact lines of the source file behind a block or section.
+(function () {
+  var map = JSON.parse(document.getElementById('src-map').textContent);
+  var AGENT = (window.CANVAS || {}).agent || 'AI';
+  var main = document.querySelector('main.content');
+  var drawer = document.querySelector('.src-drawer');
+  var titleEl = drawer.querySelector('#src-title'), whereEl = drawer.querySelector('.where'), body = drawer.querySelector('.src-body');
+  var opener = null;
+  var esc = function (t) { return t.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+
+  function trim(rows) {
+    while (rows.length && !rows[0].text.trim()) rows.shift();
+    while (rows.length && !rows[rows.length - 1].text.trim()) rows.pop();
+    return rows;
+  }
+  function render(rows) {
+    return '<div class="src-lines">' + rows.map(function (r) {
+      return '<div class="src-line' + (r.text.trim() ? '' : ' blank') + '"><span class="n">' + (r.n || '') + '</span><span class="x">' + esc(r.text) + '</span></div>';
+    }).join('') + '</div>';
+  }
+  // rendered view: the same lines through a markdown parser. A lone table row gets its table's
+  // header (and separator) lines in front, otherwise it would not render as a table.
+  function renderMd(rows) {
+    var lines = rows.map(function (r) { return r.text; }), ctx = '';
+    // a nested list item keeps its indent in the file; 4+ spaces would turn it into a code block
+    var indent = Math.min.apply(null, lines.filter(function (l) { return l.trim(); }).map(function (l) { return /^ */.exec(l)[0].length; }));
+    if (indent > 0 && isFinite(indent)) lines = lines.map(function (l) { return l.slice(Math.min(indent, /^ */.exec(l)[0].length)); });
+    var first = rows[0];
+    if (first && first.n && /^\s*\|/.test(first.text)) {
+      var t = first.n;   // 1-based original line; walk up to the table's first line
+      while (t > 1 && /^\s*\|/.test(map.orig[t - 2])) t--;
+      if (first.n > t + 1) {
+        lines = [map.orig[t - 1], map.orig[t]].concat(lines);
+        ctx = '<div class="src-ctx">表頭取自同一張表格的第 ' + t + '–' + (t + 1) + ' 行，方便對照欄位。</div>';
+      }
+    }
+    var html = window.marked ? marked.parse(lines.join('\n')) : '<pre>' + esc(lines.join('\n')) + '</pre>';
+    var box = document.createElement('div');
+    box.className = 'src-md';
+    box.innerHTML = html;
+    box.querySelectorAll('table').forEach(function (tb) {
+      var w = document.createElement('div'); w.className = 'tbl'; tb.replaceWith(w); w.appendChild(tb);
+    });
+    // short cells (IDs, names) stay on one line instead of one character per line
+    box.querySelectorAll('td').forEach(function (td) { if (td.textContent.trim().length <= 10) td.style.whiteSpace = 'nowrap'; });
+    box.querySelectorAll('a[href]').forEach(function (a) { a.target = '_blank'; a.rel = 'noopener'; });
+    return ctx + box.outerHTML;
+  }
+  var mode = 'md';
+  try { mode = localStorage.getItem('src-mode') || 'md'; } catch (e) {}
+  var shown = null;   // { rows, note } of what the drawer shows, re-rendered when the mode changes
+  function paint() {
+    if (!shown) return;
+    body.innerHTML = shown.note ? shown.note + render(shown.rows) : mode === 'raw' ? render(shown.rows) : renderMd(shown.rows);
+    drawer.querySelector('.src-mode').hidden = !!shown.note;
+    drawer.querySelectorAll('.src-mode button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.mode === mode); });
+  }
+  drawer.querySelector('.src-mode').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b || b.dataset.mode === mode) return;
+    mode = b.dataset.mode;
+    try { localStorage.setItem('src-mode', mode); } catch (err) {}
+    paint();
+  });
+  function open(title, rows, where, btn, note) {
+    titleEl.textContent = title;
+    whereEl.textContent = where;
+    shown = { rows: rows, note: note };
+    paint();
+    body.scrollTop = 0;
+    document.body.classList.add('src-open');
+    main.querySelectorAll('.src-btn.on').forEach(function (b) { b.classList.remove('on'); b.setAttribute('aria-expanded', 'false'); });
+    if (btn) { btn.classList.add('on'); btn.setAttribute('aria-expanded', 'true'); }
+    opener = btn;
+    // wait a frame: the drawer is still visibility:hidden in this tick and cannot take focus
+    requestAnimationFrame(function () { drawer.querySelector('.src-close').focus({ preventScroll: true }); });
+  }
+  function close() {
+    document.body.classList.remove('src-open');
+    main.querySelectorAll('.src-btn.on').forEach(function (b) { b.classList.remove('on'); b.setAttribute('aria-expanded', 'false'); });
+    if (opener && opener.isConnected) opener.focus({ preventScroll: true });
+    opener = null;
+  }
+
+  // a block: source.md range -> original lines (or a clear note when the agent added it)
+  function openBlock(el, btn) {
+    var r = el.dataset.src.split('-').map(Number), rows = [];
+    for (var k = r[0]; k <= r[1]; k++) rows.push({ n: map.map[k], text: map.src[k] });
+    rows = trim(rows);
+    var orig = rows.filter(function (x) { return x.n; });
+    var label = el.querySelector('h4, .steps-title, .sx-title');
+    var sec = document.querySelector('.pager-crumb b');
+    var kind = el.classList.contains('steps') ? '流程步驟' : el.tagName === 'LI' ? '條列項目' : el.closest('blockquote') ? '說明' : '段落';
+    var title = label ? label.textContent : el.classList.contains('mermaid') ? '圖表' : el.classList.contains('keynums') ? '關鍵數字' : (sec ? sec.textContent + ' · ' : '') + kind;
+    if (el.querySelector('.cid')) title = el.querySelector('.cid').textContent + '　' + title;
+    if (!orig.length) {
+      var what = el.classList.contains('mermaid') ? '這張圖' : el.classList.contains('keynums') ? '這組數字卡' : '這一段';
+      open(title, rows.map(function (x) { return { n: '', text: x.text }; }), '原文沒有（' + AGENT + ' 新增）', btn,
+        '<div class="src-note">' + what + '是 ' + AGENT + ' 依本節原文新增的，' + map.file + ' 裡沒有這一段，也沒有圖片。下面是它的原始碼：</div>');
+      return;
+    }
+    var a = orig[0].n, b = orig[orig.length - 1].n;
+    open(title, rows, map.file + ' · 第 ' + a + (b !== a ? '–' + b : '') + ' 行', btn);
+  }
+  // a section: the heading line up to the next heading, straight from the original file
+  function openSection(name, btn) {
+    var sec = name ? map.sections.filter(function (s) { return s.text === name; })[0] : map.sections[0];
+    if (!sec) return;
+    // a chapter heading with no text of its own (a cover page) shows the whole chapter
+    var e = sec.e, whole = false, level = /^#+/.exec(map.orig[sec.s - 1])[0].length;
+    var body = map.orig.slice(sec.s, sec.e).join('').trim();
+    if (!body) {
+      var next = map.sections.filter(function (x) { return x.s > sec.s && /^#+/.exec(map.orig[x.s - 1])[0].length <= level; })[0];
+      e = next ? next.s - 1 : map.orig.length;
+      whole = true;
+    }
+    var rows = [];
+    for (var n = sec.s; n <= e; n++) rows.push({ n: n, text: map.orig[n - 1] });
+    rows = trim(rows);
+    open(name || '前言', rows, map.file + ' · 第 ' + rows[0].n + '–' + rows[rows.length - 1].n + ' 行（' + (whole ? '整章' : '整節') + '）', btn);
+  }
+
+  // ---- add a button to every block that has a source range
+  function makeBtn(cls) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'src-btn ' + cls;
+    b.textContent = '原文';
+    b.setAttribute('aria-label', '查看這一段的原文');
+    b.setAttribute('aria-expanded', 'false');
+    return b;
+  }
+  function hasOriginal(el) {
+    var r = el.dataset.src.split('-').map(Number);
+    for (var k = r[0]; k <= r[1]; k++) if (map.map[k] && map.src[k].trim()) return true;
+    return false;
+  }
+  main.querySelectorAll('[data-src]').forEach(function (el) {
+    if (/^(H[1-6]|TABLE|UL|OL|HR)$/.test(el.tagName) || el.classList.contains('cards') || el.closest('#TOC')) return;
+    if (!hasOriginal(el)) return;
+    if (el.classList.contains('card')) { el.querySelector('header').appendChild(makeBtn('')); return; }
+    if (el.classList.contains('mermaid') || el.classList.contains('keynums')) {
+      el.classList.add('src-host'); el.appendChild(makeBtn('abs')); return;
+    }
+    el.insertBefore(makeBtn('flt'), el.firstChild);
+  });
+
+  main.addEventListener('click', function (e) {
+    var b = e.target.closest('.src-btn');
+    if (!b) return;
+    if (b.classList.contains('on')) return close();
+    if (b.classList.contains('sec')) return openSection(b.dataset.sec, b);
+    var host = b.closest('[data-src]');
+    if (host) openBlock(host, b);
+  });
+  drawer.querySelector('.src-close').addEventListener('click', close);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && document.body.classList.contains('src-open') && !document.querySelector('dialog[open]')) close();
+  });
+})();
+</script>

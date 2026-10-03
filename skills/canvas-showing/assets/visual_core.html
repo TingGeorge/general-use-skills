@@ -1,0 +1,284 @@
+<style>
+/* ---------- visual pages: pictures replace the text blocks; every keyword opens its original clause ---------- */
+.vz-hide { display: none !important; }
+.vz { display: grid; gap: 22px; margin: 6px 0 32px; }
+.vz-box { border: 1px solid color-mix(in srgb, var(--k, #2b59d1) 22%, var(--color-ash)); border-radius: 18px; padding: 16px 18px 18px; background: rgba(255, 255, 255, .6); min-width: 0; }
+.vz-h { font: 12px var(--font-mono); letter-spacing: .12em; color: var(--color-smoke); margin: 0 0 10px; }
+.vz-t { font-family: var(--font-serif); font-size: 19px; line-height: 1.35; color: var(--color-ink); margin: 0 0 10px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.vz-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.vz-sub { flex-basis: 100%; font: 11.5px var(--font-mono); letter-spacing: .08em; color: var(--color-smoke); margin-top: 4px; }
+.vz-arr { color: color-mix(in srgb, var(--k, #2b59d1) 70%, var(--color-graphite)); font-size: 15px; }
+.vz-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); }
+
+.vz-chip {
+  font: inherit; font-size: 14px; line-height: 1.4; text-align: left; cursor: pointer; position: relative;
+  border: 1px solid color-mix(in srgb, var(--k, #2b59d1) 28%, var(--color-ash)); background: #fff; color: var(--color-off-black);
+  border-radius: 999px; padding: 5px 13px; transition: background .12s, border-color .12s;
+}
+.vz-chip:hover, .vz-chip.on { border-color: var(--k, #2b59d1); background: var(--kt, #eaeffb); }
+.vz-chip:focus-visible { outline: 2px solid var(--k, #2b59d1); outline-offset: 2px; }
+.vz .vz-chip.y, .vz .vz-chip.o { padding-right: 24px; }
+.vz-chip.y::after, .vz-chip.o::after { content: ''; position: absolute; right: 9px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; }
+.vz-chip.y::after { background: #d9c26a; }
+.vz-chip.o::after { border: 1.5px dashed #d0533a; width: 6px; height: 6px; }
+.vz-chip.y.o::after { background: none; box-shadow: -11px 0 0 #d9c26a; }
+.vz .vz-chip.y.o { padding-right: 35px; }
+.vz-chip.no { text-decoration: line-through; text-decoration-color: rgba(0, 0, 0, .35); }
+.vz-chip.miss { border-style: dashed; color: #b5432c; cursor: default; }
+.vz-key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--color-graphite); }
+.vz-key i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: .05em; }
+
+/* pop-up with the original clause */
+.vz-pop {
+  position: absolute; z-index: 70; width: min(460px, calc(100vw - 32px)); background: #fff;
+  border: 1px solid var(--color-ash); border-radius: 16px; box-shadow: 0 14px 44px rgba(0, 0, 0, .16);
+  padding: 12px 16px 14px; font-family: var(--font-text, sans-serif); font-size: 15px; line-height: 1.8; color: var(--color-off-black);
+}
+.vz-pop .vz-pt { display: flex; gap: 10px; justify-content: space-between; align-items: center; font: 12px var(--font-mono); color: var(--color-smoke); margin-bottom: 6px; }
+.vz-pop .vz-pt button { font: 12px var(--font-mono); border: 1px solid var(--color-ash); background: #fff; border-radius: 999px; padding: 3px 11px; cursor: pointer; color: var(--color-graphite); flex: none; }
+.vz-pop .vz-pt button:hover { border-color: var(--color-lake-blue); color: var(--color-lake-blue); }
+.vz-pop .sx-list { margin: 0; }
+.vz-pop .card { border: 0; padding: 0; background: none; box-shadow: none; }
+.vz-pop .card header { display: none; }
+@media (max-width: 640px) { .vz-pop { position: fixed; left: 12px !important; right: 12px; top: auto !important; bottom: 12px; width: auto; max-height: 60vh; overflow: auto; } }
+.vz-left { border: 1px dashed #d0533a; border-radius: 14px; padding: 12px 16px; font-size: 14px; }
+
+/* week strip + duration bars (.vz-bar) + month calendars (.vz-cal) */
+.vz-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 4px 0 6px; }
+.vz-week span { text-align: center; padding: 8px 0; border-radius: 8px; background: var(--kt); font-size: 14px; }
+.vz-week + .vz-ends { display: flex; justify-content: space-between; font: 12px var(--font-mono); color: var(--color-graphite); margin-bottom: 10px; }
+.vz-bars { display: grid; gap: 6px; }
+.vz-bar { display: grid; grid-template-columns: 52px 1fr; gap: 10px; align-items: center; font-size: 13.5px; }
+.vz-bar .vz-chip { border-radius: 8px; padding: 3px 10px; background: var(--kt); width: calc(var(--d) / 14 * 100%); min-width: 64px; font: 12.5px var(--font-mono); }
+.vz-bar .vz-chip.calc { background: repeating-linear-gradient(135deg, #fff 0 5px, var(--kt) 5px 10px); }
+.vz-cals { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 500px), 1fr)); }
+.vz-cal { display: grid; grid-template-columns: 70px repeat(7, minmax(0, 1fr)); border: 1px solid var(--color-ash); border-radius: 12px; overflow: hidden; background: #fff; }
+.vz-cal > div { min-height: 58px; padding: 4px; border-top: 1px solid #ece8e5; border-left: 1px solid #ece8e5; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vz-cal > .dh { min-height: 0; padding: 5px 0; border-top: 0; align-items: center; font: 11px var(--font-mono); color: var(--color-smoke); background: var(--color-parchment); }
+.vz-cal > :nth-child(8n + 1) { border-left: 0; }
+.vz-cal .n { font: 11px var(--font-mono); color: var(--color-smoke); }
+.vz-cal .wk { background: var(--color-parchment); justify-content: center; }
+.vz-cal .bn { background: #e8eefc; }
+.vz-cal .ba { background: #e3f3e8; }
+.vz-cal .vz-chip { font-size: 11.5px; line-height: 1.3; border-radius: 7px; padding: 3px 6px; width: 100%; }
+.vz-cal .vz-chip.dl { border-color: #d0533a; color: #a63a24; }
+.vz-cal .vz-chip.ok { border-color: #2f8a4c; color: #22673a; }
+.vz-cal .wk .vz-chip { background: transparent; border-color: transparent; padding: 2px; text-align: center; font-weight: 600; }
+.vz-cal .bn.wk .vz-chip { color: #2b59d1; }
+.vz-cal .ba.wk .vz-chip { color: #2f8a4c; }
+.vz-cal .vz-chip { overflow-wrap: anywhere; }
+@container doc (max-width: 560px) {
+  .vz-cal { grid-template-columns: 44px repeat(7, minmax(0, 1fr)); }
+  .vz-cal > div { padding: 3px 2px; }
+  .vz-cal .vz-chip { font-size: 10.5px; padding: 2px 3px; }
+  .vz-cal .wk .vz-chip { font-size: 10px; padding: 1px; }
+  .vz-cal .n { font-size: 9.5px; }
+}
+.vz-cal-t { font-family: var(--font-serif); font-size: 17px; margin: 0 0 8px; }
+.vz-cal-x { margin-top: 8px; }
+
+/* time lanes (.vz-lane) + comparison matrix (.vz-mx) */
+.vz-lane { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 8px 14px; align-items: center; padding: 10px 0; }
+.vz-lane + .vz-lane { border-top: 1px dashed var(--color-ash); }
+.vz-lane > b { font-weight: 600; font-size: 14px; line-height: 1.5; }
+.vz-track { display: flex; gap: 4px; align-items: stretch; }
+.vz-track .vz-chip { flex: var(--f) 1 0; border-radius: 10px; padding: 8px 10px; font-size: 13px; min-width: 0; }
+.vz-track .vz-chip.n { background: #e8eefc; }
+.vz-track .vz-chip.a { background: #e3f3e8; border-color: #9fd0b0; }
+.vz-track .vz-chip.dl { flex: 0 0 auto; background: #fdebe6; border-color: #e7a594; color: #a63a24; font: 12px var(--font-mono); }
+.vz-mx { display: grid; gap: 0; border: 1px solid var(--color-ash); border-radius: 14px; overflow: hidden; background: #fff; }
+.vz-mr { display: grid; grid-template-columns: 170px repeat(4, minmax(0, 1fr)); }
+.vz-mr + .vz-mr { border-top: 1px solid #ece8e5; }
+.vz-mr > div { padding: 10px 10px; display: flex; flex-wrap: wrap; gap: 5px; align-content: flex-start; min-width: 0; }
+.vz-mr > div + div { border-left: 1px solid #ece8e5; }
+.vz-mr > div:first-child { font-weight: 600; font-size: 14px; line-height: 1.45; background: var(--color-parchment); }
+.vz-mr.hd > div { font: 11.5px var(--font-mono); letter-spacing: .08em; color: var(--color-smoke); background: var(--color-parchment); font-weight: 400; }
+.vz-mr .vz-chip { font-size: 13px; border-radius: 9px; padding: 4px 9px; }
+.vz-mr .none { color: var(--color-ash); }
+@container doc (max-width: 820px) {
+  .vz-mr.hd { display: none; }
+  .vz-mr { grid-template-columns: 1fr; }
+  .vz-mr > div + div { border-left: 0; border-top: 1px dashed #ece8e5; }
+  .vz-mr > div + div::before { content: attr(data-h); flex-basis: 100%; font: 11px var(--font-mono); letter-spacing: .08em; color: var(--color-smoke); }
+  .vz-lane { grid-template-columns: 1fr; }
+}
+
+/* grouped item tiles with an ID pill (.vz-fg / .vz-f) */
+.vz-fg > .vz-h { display: flex; gap: 8px; align-items: center; }
+.vz-f { border: 1px solid color-mix(in srgb, var(--k) 22%, var(--color-ash)); border-radius: 14px; padding: 12px 14px 14px; background: #fff; min-width: 0; }
+.vz-f.ext { background: repeating-linear-gradient(135deg, #fff 0 14px, color-mix(in srgb, var(--kt) 55%, #fff) 14px 15px); }
+.vz-f .vz-t { font-size: 17px; margin-bottom: 8px; }
+.vz-id { font: 500 12px var(--font-mono); color: #fff; background: var(--k); border-radius: 999px; padding: 2px 9px; }
+.vz-f.ext .vz-id { background: #fff; color: var(--k); border: 1px solid var(--k); }
+.vz-f .vz-chip { font-size: 13.5px; }
+
+/* numbered board: rows of small ID tiles with a size meter (.vz-acr / .vz-ac) */
+.vz-acr { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 10px 16px; padding: 12px 0; align-items: start; }
+.vz-acr + .vz-acr { border-top: 1px solid #ece8e5; }
+.vz-acr > b { font-weight: 600; font-size: 14px; line-height: 1.5; display: flex; flex-direction: column; gap: 4px; }
+.vz-acr > b small { font: 11.5px var(--font-mono); color: var(--color-smoke); font-weight: 400; }
+.vz-acr .vz-meter { height: 6px; border-radius: 3px; background: var(--k); opacity: .55; width: calc(var(--c) / 13 * 100%); }
+.vz-ac { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; border-radius: 10px; padding: 5px 10px 6px; font-size: 13px; }
+.vz-ac small { font: 500 11px var(--font-mono); color: var(--k); }
+.vz-ac.new small::after { content: ' 新'; color: #2b59d1; }
+.vz-ac.del { border-style: dashed; color: var(--color-smoke); background: transparent; }
+@container doc (max-width: 700px) { .vz-acr { grid-template-columns: 1fr; } }
+.vz-chip.tg { background: var(--kt, #eaeffb); font-weight: 600; }
+.vz-ac .vz-n { font: 10.5px var(--font-mono); color: var(--color-smoke); }
+
+/* a picture that holds an existing diagram */
+.vz-box > .mermaid, .vz-box > .stats, .vz-box > .legend, .vz-box > .keynums { margin: 4px 0 12px; }
+.vz > .stats, .vz > .legend, .vz > .keynums { margin: 0; }
+
+/* screens as phone frames (.vz-phones / .vz-phone) */
+.vz-phones { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); }
+.vz-phone { border: 2px solid color-mix(in srgb, var(--k, #2b59d1) 40%, var(--color-ash)); border-radius: 28px; padding: 28px 12px 16px; background: #fff; position: relative; min-width: 0; }
+.vz-phone::before { content: ''; position: absolute; top: 11px; left: 50%; width: 44px; height: 5px; margin-left: -22px; border-radius: 3px; background: color-mix(in srgb, var(--k, #2b59d1) 30%, var(--color-ash)); }
+.vz-phone .vz-t { font-size: 16px; justify-content: center; text-align: center; margin-bottom: 10px; }
+.vz-phone .vz-row { flex-direction: column; align-items: stretch; gap: 6px; }
+.vz-phone .vz-chip { border-radius: 10px; font-size: 13px; text-align: center; }
+
+/* before → after rows (.vz-ba) */
+.vz-ba { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1.3fr); gap: 8px 10px; align-items: center; padding: 12px 0; }
+.vz-ba + .vz-ba { border-top: 1px dashed var(--color-ash); }
+.vz-ba > .vz-arr { text-align: center; font-size: 18px; }
+.vz-ba .vz-chip.no { color: var(--color-graphite); background: var(--color-parchment); }
+@container doc (max-width: 640px) { .vz-ba { grid-template-columns: 1fr; } .vz-ba > .vz-arr { text-align: left; } .vz-ba > .vz-arr::before { content: '↓'; } .vz-ba > .vz-arr span { display: none; } }
+
+/* situation → answer map, two columns joined by arrows (.vz-map) */
+.vz-map { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); gap: 8px 10px; align-items: center; }
+@container doc (max-width: 560px) { .vz-map { grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); } }
+</style>
+<script>
+(function () {
+  var main = document.querySelector('main.content');
+  var units = [], pop = null;
+  var norm = function (s) { return s.replace(/\s+/g, ' ').trim(); };
+
+  // ---- one section → one visual. ctx.find / ctx.chip tie every keyword to its original clause.
+  function build(id, render) {
+    var h = document.getElementById(id);
+    if (!h) return console.warn('vz: no section', id);
+    var els = [];
+    for (var el = h.nextElementSibling; el && !/^H[1-6]$/.test(el.tagName); el = el.nextElementSibling) els.push(el);
+    var SEL = 'li, .fv, p, .sx, .steps-tail', leaves = [], used = [], slots = [];
+    els.forEach(function (e) {
+      [e].concat([].slice.call(e.querySelectorAll(SEL))).forEach(function (x) {
+        if (x.matches(SEL) && !x.querySelector(SEL) && !x.closest('.mermaid') && norm(x.textContent)) leaves.push(x);
+      });
+    });
+    var ctx = {
+      els: els, misses: [],
+      // a card by its number, or by its title when the table had no number column
+      card: function (key) {
+        var r = null;
+        els.forEach(function (e) { e.querySelectorAll('.card').forEach(function (c) { var t = c.querySelector('.cid') || c.querySelector('h4'); if (!r && t && norm(t.textContent) === key) r = c; }); });
+        if (!r) ctx.misses.push('card ' + key);
+        return r;
+      },
+      cards: function () { var r = []; els.forEach(function (e) { r.push.apply(r, e.querySelectorAll('.card')); }); return r; },
+      // an existing diagram or overview block moves into the picture instead of being hidden
+      slot: function (sel, n) {
+        var all = [];
+        els.forEach(function (e) { if (e.matches(sel)) all.push(e); all.push.apply(all, e.querySelectorAll(sel)); });
+        var x = all[n || 0];
+        if (!x) { ctx.misses.push('slot ' + sel + ' ' + (n || 0)); return ''; }
+        return '<div class="vz-slot" data-slot="' + (slots.push(x) - 1) + '"></div>';
+      },
+      box: function (t, items, cls) {
+        return '<div class="vz-box' + (cls ? ' ' + cls : '') + '">' + (t ? '<div class="vz-t">' + t + '</div>' : '') + ctx.chips(items) + '</div>';
+      },
+      use: function (m) { ctx.find(m); return ''; },   // a label-only line (e.g. 「標記：」) is shown by the box title
+      group: function (t, html) { return '<div class="vz-fg"><div class="vz-h">' + t + '</div><div class="vz-grid">' + html + '</div></div>'; },
+      find: function (m, scope) {
+        var exact = m[0] === '=', t = exact ? m.slice(1) : m;
+        var hit = function (x) { var s = norm(x.textContent); return exact ? s.replace(/[。；，]$/, '') === t : s.indexOf(t) >= 0; };
+        var pool = scope ? leaves.filter(function (x) { return scope.contains(x); }) : leaves;
+        var r = pool.filter(hit)[0];
+        if (!r) {   // bold leads become titles, not list items: fall back to the smallest element holding the words
+          var all = [];
+          (scope ? [scope] : els).forEach(function (e) { all.push(e); all.push.apply(all, e.querySelectorAll('*')); });
+          r = all.filter(hit).sort(function (a, b) { return a.textContent.length - b.textContent.length; })[0];
+        }
+        if (!r) { ctx.misses.push(m); return null; }
+        used.push(r);
+        return r;
+      },
+      chip: function (k, m, cls, scope) {
+        var u = typeof m === 'string' ? ctx.find(m, scope) : m;
+        if (typeof m !== 'string' && m) used.push(m);
+        if (!u) return '<span class="vz-chip miss" title="找不到原文：' + m + '">' + k + '</span>';
+        var f = (u.querySelector('.mk.y, .claude-note') ? ' y' : '') + (u.querySelector('.mk.o, .open-note') ? ' o' : '');
+        return '<button type="button" class="vz-chip ' + (cls || '') + f + '" data-u="' + (units.push(u) - 1) + '">' + k + '</button>';
+      },
+      // items: [keyword, match, cls] chips; a bare string is a small sub-heading; '→' draws an arrow
+      chips: function (items, scope, flow) {
+        return '<div class="vz-row">' + items.map(function (it) {
+          if (it === '→') return '<span class="vz-arr">→</span>';
+          if (typeof it === 'string') return '<span class="vz-sub">' + it + '</span>';
+          return ctx.chip(it[0], it[1], it[2], scope);
+        }).join(flow ? '<span class="vz-arr">→</span>' : '') + '</div>';
+      }
+    };
+    var div = document.createElement('div');
+    div.className = 'vz';
+    if (h.dataset.kind) div.dataset.kind = h.dataset.kind;
+    div.innerHTML = render(ctx);
+    // anything no picture points to stays visible, so no detail is lost
+    var left = leaves.filter(function (l) {
+      return !used.some(function (u) { return u === l || u.contains(l); }) && !slots.some(function (s) { return s.contains(l) || l.contains(s); });
+    });
+    div.querySelectorAll('.vz-slot').forEach(function (s) { s.replaceWith(slots[+s.dataset.slot]); });
+    if (left.length) {
+      div.insertAdjacentHTML('beforeend', '<div class="vz-left"><div class="vz-h">還沒畫進圖的原文</div><ul>' +
+        left.map(function (l) { return '<li>' + l.innerHTML + '</li>'; }).join('') + '</ul></div>');
+      console.warn('vz', id, 'uncovered', left.map(function (l) { return norm(l.textContent).slice(0, 40); }));
+    }
+    if (ctx.misses.length) console.warn('vz', id, 'missing', ctx.misses);
+    div.dataset.vzLeft = left.length;
+    div.dataset.vzMiss = ctx.misses.length;
+    h.after(div);
+    els.forEach(function (e) { if (slots.indexOf(e) < 0) e.classList.add('vz-hide'); });
+  }
+
+  // ---- pop-up: the original clause, with its markers, and a way into the 原文 panel
+  function close() { if (pop) { pop.remove(); pop = null; } document.querySelectorAll('.vz-chip.on').forEach(function (b) { b.classList.remove('on'); }); }
+  function open(b) {
+    var on = b.classList.contains('on');
+    close();
+    if (on) return;
+    var u = units[+b.dataset.u], card = u.closest('.card') || (u.matches('.card') ? u : null);
+    var title = card ? norm((card.querySelector('.cid') || {}).textContent || '') + ' ' + norm((card.querySelector('h4') || {}).textContent || '')
+      : norm(((u.closest('.sx') || u).querySelector('.sx-title') || {}).textContent || '');
+    var blk = u.closest('[data-src]'), sb = blk && [].filter.call(blk.querySelectorAll('.src-btn'), function (s) { return s.closest('[data-src]') === blk; })[0];
+    pop = document.createElement('div');
+    pop.className = 'vz-pop';
+    pop.setAttribute('role', 'dialog');
+    var body = u.cloneNode(true);
+    body.querySelectorAll('.src-btn').forEach(function (s) { s.remove(); });
+    pop.innerHTML = '<div class="vz-pt"><span>' + (title || '原文') + '</span>' + (sb ? '<button type="button">原文 ↗</button>' : '') + '</div>';
+    pop.appendChild(u.matches('li') ? (function () { var ul = document.createElement('ul'); ul.className = 'sx-list'; ul.appendChild(body); return ul; })() : body);
+    if (sb) pop.querySelector('.vz-pt button').onclick = function () { close(); sb.click(); };
+    document.body.appendChild(pop);
+    var r = b.getBoundingClientRect(), w = pop.offsetWidth;
+    pop.style.left = Math.max(16, Math.min(r.left, innerWidth - w - 16)) + scrollX + 'px';
+    var below = r.bottom + 8 + pop.offsetHeight <= innerHeight || r.top < pop.offsetHeight + 8;
+    pop.style.top = (below ? r.bottom + 8 : r.top - pop.offsetHeight - 8) + scrollY + 'px';
+    b.classList.add('on');
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-u]');
+    if (b) return open(b);
+    if (pop && !e.target.closest('.vz-pop')) close();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+
+  // legend line under each picture: one dot per note marker from config.html
+  var DOT = { y: 'background:#d9c26a', o: 'border:1.5px dashed #d0533a;width:6px;height:6px' };
+  var KEY = '<div class="vz-key"><span>點任一個詞看原文全句</span>' + ((window.CANVAS || {}).notes || []).map(function (n) {
+    return '<span><i style="' + DOT[n.cls] + '"></i>含' + (/^[A-Za-z]/.test(n.note) ? ' ' : '') + n.note + '</span>';
+  }).join('') + '</div>';
+
+  window.VZ = { build: build, KEY: KEY, norm: norm };
+})();
+</script>

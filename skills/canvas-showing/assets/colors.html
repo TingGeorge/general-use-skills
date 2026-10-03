@@ -1,0 +1,136 @@
+<style>
+/* ---------- colour by nature: every section has a kind, every kind a hue ----------
+   --k is the strong accent (bars, ID pills, dots), --kt the soft tint (block backgrounds).
+   The [data-kind] → hue rules are generated below from CANVAS.kinds and the palette. */
+
+/* section headings and the sticky header carry the section's hue */
+main.content h2[data-kind], main.content h3[data-kind] { border-left: 5px solid var(--k); padding-left: 14px; }
+.pager-crumb[data-kind] b { color: var(--k); }
+.pager-crumb[data-kind] i.kind {
+  font-style: normal; display: inline-flex; align-items: center; height: 22px; padding: 0 10px; margin-right: 12px;
+  border-radius: 999px; font-size: 12px; letter-spacing: .04em; color: #fff; background: var(--k); vertical-align: .1em;
+}
+
+/* cards and list blocks: tinted body, accent bar on the left, ID pill in the accent */
+.cards[data-kind] .card, .blocks[data-kind] > li {
+  background: var(--kt); border-color: color-mix(in srgb, var(--k) 22%, var(--color-ash));
+  box-shadow: inset 5px 0 0 var(--k);
+}
+.cards[data-kind] .card { padding-left: 24px; }
+.blocks[data-kind]:not(ol) > li { padding-left: 23px; }
+.cards[data-kind] .card .cid { background: var(--k); }
+.cards[data-kind] .card .flabel { color: color-mix(in srgb, var(--k) 70%, var(--color-graphite)); }
+.cards[data-kind] .card.deleted { background: transparent; box-shadow: inset 5px 0 0 var(--color-ash); }
+ol.blocks[data-kind] > li::before { color: var(--k); }
+.cards[data-kind] .card.before-after .cbody { background: rgba(255, 255, 255, .7); }
+.cards[data-kind] .card.before-after .cbody::before { color: var(--k); }
+
+/* chapter covers: each section card in its own hue */
+main.content a.cc-card[data-kind] { background: var(--kt); border-color: color-mix(in srgb, var(--k) 22%, var(--color-ash)); box-shadow: inset 5px 0 0 var(--k); padding-left: 25px; }
+main.content a.cc-card[data-kind]:hover { border-color: var(--k); }
+.cc-card[data-kind] .cc-num { background: var(--k); }
+a.cc-card[data-kind]:hover .cc-pages { color: var(--k); }
+
+/* running text: bullets and lead labels in the section hue */
+[data-kind] .sx-list > li::before { background: var(--k); opacity: .7; }
+[data-kind] .sx-lbl, [data-kind] .sx-title { color: var(--k); }
+.keynums[data-kind] .kn { background: var(--kt); border-color: color-mix(in srgb, var(--k) 22%, var(--color-ash)); }
+.keynums[data-kind] .kn-value { color: var(--k); }
+.stats .kn[data-kind] { background: var(--kt); border-color: color-mix(in srgb, var(--k) 25%, var(--color-ash)); box-shadow: inset 0 4px 0 var(--k); }
+.stats .kn[data-kind] .kn-value { color: var(--k); }
+
+/* diagrams: frame and step nodes in the section hue; decisions always amber so branches stand out */
+[data-kind] .mermaid { border-color: color-mix(in srgb, var(--k) 30%, var(--color-ash)); background: color-mix(in srgb, var(--kt) 45%, transparent); }
+[data-kind] .mermaid .node rect, [data-kind] .mermaid .node .label-container:not(polygon) {
+  fill: #fff !important; stroke: color-mix(in srgb, var(--k) 55%, white) !important;
+}
+.mermaid .node polygon { fill: #fff4e2 !important; stroke: #c26a00 !important; }
+.mermaid .edgeLabel, .mermaid .edgeLabel p { color: #a35a00 !important; }
+[data-kind] .mermaid .flowchart-link, [data-kind] .mermaid .transition { stroke: color-mix(in srgb, var(--k) 60%, var(--color-graphite)) !important; }
+[data-kind] .mermaid marker path:not([fill="none"]) { fill: color-mix(in srgb, var(--k) 60%, var(--color-graphite)) !important; stroke: none !important; }
+
+/* inline reference chips: three hues a config can pick per code family (r blue, d purple, c orange) */
+.ref.d { border-color: #c9bfe0; color: #6b5b95; background: #f5f2fa; }
+.ref.c { border-color: #f0c99a; color: #a85c00; background: #fdf4e8; }
+.ref.r { background: #eef2fc; }
+.mk.o { border-color: #d0533a; color: #b5432c; background: #fff; }
+.open-note { background: rgba(208, 83, 58, .08); }
+i.dot.o { border-color: #d0533a; }
+
+/* TOC: a dot in each section's hue */
+nav#TOC a[data-kind]::before {
+  content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 8px;
+  background: var(--k); vertical-align: .12em;
+}
+
+/* legend on the first page */
+.legend { border: 1px solid var(--color-ash); border-radius: 20px; padding: 16px 20px; margin: 0 0 28px; background: rgba(255, 255, 255, .5); }
+.legend .lg-t { font-size: 12px; letter-spacing: .14em; color: var(--color-smoke); margin-bottom: 10px; }
+.legend .lg-row { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.legend .lg-row + .lg-row { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--color-ash); }
+.legend .sw {
+  display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 12px 0 10px; border-radius: 999px;
+  font-size: 12.5px; color: var(--color-off-black); background: var(--kt); border: 1px solid color-mix(in srgb, var(--k) 30%, transparent);
+}
+.legend .sw i { width: 8px; height: 8px; border-radius: 50%; background: var(--k); }
+.legend .lg-row > span:not(.sw) { font-size: 12.5px; color: var(--color-graphite); margin-right: 8px; }
+</style>
+<script>
+// Colour by nature: tag every top-level block (and the TOC links) with the kind of its section.
+(function () {
+  var main = document.querySelector('main.content');
+  var C = window.CANVAS || {};
+  var PALETTE = {
+    pink: ['#b8458a', '#faedf4'], teal: ['#0f8b8d', '#e4f4f3'], gray: ['#8a837d', '#efebe8'], blue: ['#2b59d1', '#eaeffb'],
+    violet: ['#7a4fd1', '#f1ebfc'], cyan: ['#0b7fb3', '#e4f2f9'], slate: ['#56687a', '#ebeff3'], orange: ['#c26a00', '#fcf0e1'],
+    green: ['#2f8a4c', '#e6f4ea'], olive: ['#937400', '#f8f1d6'], red: ['#d0533a', '#fdebe6'], purple: ['#6b5b95', '#f0edf6'],
+    brown: ['#8a6a2f', '#f5eee2'], gold: ['#a88a1f', '#fbf5df']
+  };
+  // auto colours skip gray (out of scope), red (open items) and gold (the confirm marker)
+  var AUTO = ['blue', 'teal', 'violet', 'orange', 'green', 'pink', 'cyan', 'olive', 'purple', 'brown', 'slate'];
+
+  // CANVAS.kinds = { key: [label, hue] } with CANVAS.kindOf(h2, h3) → key; default: one kind per chapter
+  var KINDS = {}, kindOf = C.kindOf, chapters = [];
+  if (C.kinds) Object.keys(C.kinds).forEach(function (k) { KINDS[k] = C.kinds[k]; });
+  else {
+    [].forEach.call(main.querySelectorAll('main.content > h2'), function (h, i) {
+      var label = h.textContent.replace(/^\s*[\d.]+\s*/, '').trim();
+      KINDS['c' + i] = [label, AUTO[i % AUTO.length]];
+      chapters.push(h.textContent);
+    });
+    kindOf = function (h2) { var i = chapters.indexOf(h2); return i < 0 ? '' : 'c' + i; };
+  }
+  var rule = function (k, hue) { var p = PALETTE[hue] || PALETTE.blue; return '[data-kind="' + k + '"]{--k:' + p[0] + ';--kt:' + p[1] + '}'; };
+  // open / confirm colour the marker tiles; a config kind with the same key wins (later rule)
+  var css = [rule('open', 'red'), rule('confirm', 'gold')].concat(Object.keys(KINDS).map(function (k) { return rule(k, KINDS[k][1]); }));
+  var st = document.createElement('style');
+  st.textContent = css.join('\n');
+  document.head.prepend(st);
+
+  var h2 = '', h3 = '';
+  [].forEach.call(main.children, function (el) {
+    if (el.id === 'TOC' || el.id === 'title-block-header') return;
+    if (el.tagName === 'H1') { h2 = h3 = ''; return; }
+    if (el.tagName === 'H2') { h2 = el.textContent; h3 = ''; }
+    if (el.tagName === 'H3') h3 = el.textContent;
+    var k = kindOf(h2, h3);
+    if (k) { el.dataset.kind = k; el.dataset.label = KINDS[k][0]; }
+  });
+  document.querySelectorAll('nav#TOC a[href^="#"]').forEach(function (a) {
+    var t = document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
+    if (t && t.dataset.kind) a.dataset.kind = t.dataset.kind;
+  });
+
+  // legend: what each colour means, right under the overview tiles
+  var lg = document.createElement('div');
+  lg.className = 'legend';
+  lg.innerHTML = '<div class="lg-t">顏色代表內容的性質</div><div class="lg-row">' +
+    Object.keys(KINDS).map(function (k) { return '<span class="sw" data-kind="' + k + '"><i></i>' + KINDS[k][0] + '</span>'; }).join('') +
+    '</div><div class="lg-row"><span>文中標記：</span>' +
+    ((C.refs && C.refs.legend) || []).map(function (r) { return '<span class="ref ' + r[0] + '">' + r[1] + '</span><span>' + r[2] + '</span>'; }).join('') +
+    (C.notes || []).map(function (n) { return '<span class="mk ' + n.cls + '">' + n.flag + '</span><span>' + (n.legend || n.note) + '</span>'; }).join('') +
+    '<span class="ref" style="background:#fff4e2;border-color:#c26a00;color:#a35a00">◇</span><span>圖中的判斷</span></div>';
+  var stats = main.querySelector('.stats');
+  if (stats) stats.after(lg);
+})();
+</script>

@@ -1,0 +1,235 @@
+<style>
+:root { --side: 0px; }
+@media (min-width: 1080px) { :root { --side: 264px; } body.toc-collapsed { --side: 0px; } }
+
+/* section header stays at the top while the page content scrolls under it */
+.pager-crumb {
+  position: sticky; top: 0; z-index: 5; background: var(--color-parchment);
+  font-size: 14px; letter-spacing: .06em; color: var(--color-smoke);
+  border-bottom: 1px solid var(--color-ash); padding: 18px 0 14px; margin-bottom: 28px;
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+}
+.pager-crumb b { font-weight: 500; color: var(--color-lake-blue); }
+main.content [id] { scroll-margin-top: 90px; }
+
+.page { padding-bottom: 96px; }
+@media (max-width: 640px) { .page { padding: 32px 18px 80px; } }
+
+/* chapter cover: the chapter title plus one card per section */
+.chapter-cover { margin: 0 0 24px; }
+.cc-meta { font-size: 13px; letter-spacing: .08em; color: var(--color-smoke); margin: -6px 0 24px; }
+.cc-grid { display: grid; gap: 14px; }
+@container doc (min-width: 560px) { .cc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container doc (min-width: 1000px) { .cc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+main.content a.cc-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 18px 20px 16px;
+  border: 1px solid var(--color-ash); border-radius: 20px; background: rgba(255, 255, 255, .5);
+  color: inherit; text-decoration: none; transition: border-color .15s, background .15s;
+}
+main.content a.cc-card:hover, main.content a.cc-card:focus-visible { border-color: var(--color-lake-blue); background: var(--color-periwinkle-mist); }
+.cc-num {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 500; color: #fff; background: var(--color-lake-blue);
+}
+.cc-title { font-family: var(--font-serif); font-size: 20px; line-height: 1.4; color: var(--color-ink); }
+.cc-pages { font-size: 12.5px; color: var(--color-smoke); }
+a.cc-card:hover .cc-pages { color: var(--color-lake-blue); }
+
+/* collapsible sidebar (wide screens) */
+.toc-toggle { display: none; }
+@media (min-width: 1080px) {
+  nav#TOC { transition: transform .25s ease, visibility .25s; }
+  .announce, .hero, .page { transition: margin-left .25s ease, margin-right .25s ease; }
+  body.toc-collapsed nav#TOC { transform: translateX(-100%); visibility: hidden; }
+  body.toc-collapsed .announce, body.toc-collapsed .hero, body.toc-collapsed .page { margin-left: 0; }
+  .toc-toggle {
+    display: block; position: fixed; top: 20px; left: calc(var(--side) - 52px); z-index: 20;
+    font: inherit; font-size: 13px; min-width: 36px; height: 36px; padding: 0 12px; cursor: pointer;
+    color: var(--color-off-black); background: var(--color-parchment);
+    border: 1px solid var(--color-ash); border-radius: 999px; transition: left .25s ease;
+  }
+  body.toc-collapsed .toc-toggle { left: 12px; top: 64px; }
+  /* top: -48px cancels the TOC's padding-top, so the header covers the strip above it too */
+  nav#TOC::before {
+    position: sticky; top: -48px; z-index: 3; background: var(--color-parchment);
+    margin: -48px 0 20px; padding: 30px 0 14px;
+  }
+  .toc-toggle:hover { border-color: var(--color-lake-blue); color: var(--color-lake-blue); }
+}
+nav#TOC a.active { color: var(--color-lake-blue); background: var(--color-periwinkle-mist); }
+html { scroll-behavior: auto; }
+.toc-wrap > summary {
+  display: inline-block; list-style: none; cursor: pointer; margin-bottom: 24px;
+  border: 1px solid var(--color-ash); border-radius: 999px; padding: 12px 22px; min-height: 48px; font-size: 14px;
+}
+.toc-wrap > summary::-webkit-details-marker { display: none; }
+@media (min-width: 1080px) { .toc-wrap > summary { display: none; } }
+</style>
+<script>
+// Pager: show the document one page at a time instead of one endless scroll.
+// Every h2/h3 starts a page that holds its whole section, however long; the page scrolls.
+(function () {
+  var main = document.querySelector('main.content');
+  var hero = document.querySelector('header.hero');
+
+  var blocks = [].filter.call(main.children, function (el) {
+    return el.id !== 'title-block-header' && el.id !== 'TOC';
+  });
+
+  // ---- build pages: each page = list of items { el }
+  var pages = [], cur = null, h2 = '', h3 = '';
+  function newPage() {
+    cur = { items: [], h2: h2, h3: h3, anchors: [] };
+    pages.push(cur);
+  }
+
+  blocks.forEach(function (el) {
+    var tag = el.tagName;
+    if (tag === 'H1') { newPage(); cur.items.push({ el: el }); return; }
+    if (tag === 'H2' || tag === 'H3') {
+      if (tag === 'H2') { h2 = el.textContent; h3 = ''; } else { h3 = el.textContent; }
+      // an h2 with no text of its own becomes a chapter cover page (filled in below)
+      if (tag === 'H3' && cur && cur.items.length === 1 && cur.items[0].el.tagName === 'H2') cur.cover = true;
+      newPage();
+      cur.items.push({ el: el });
+      cur.anchors.push(el.id);
+      return;
+    }
+    if (!cur) newPage();
+    cur.items.push({ el: el });
+    if (el.id) cur.anchors.push(el.id);
+  });
+  pages = pages.filter(function (p) { return p.items.length; });
+
+  // ---- chapter covers: the chapter's sections as cards, so the cover never repeats the first section
+  var esc = function (t) { return t.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  pages.forEach(function (p, i) {
+    if (!p.cover) return;
+    var secs = [];
+    for (var k = i + 1; k < pages.length && pages[k].h2 === p.h2; k++) secs.push({ h3: pages[k].h3, id: pages[k].anchors[0], first: k });
+    var num = /^(\d+)\./.exec(p.h2);
+    var cov = document.createElement('div');
+    cov.className = 'chapter-cover';
+    cov.innerHTML = '<div class="cc-meta">' + (num ? '第 ' + num[1] + ' 章 · ' : '') + secs.length + ' 個小節</div>' +
+      '<div class="cc-grid">' + secs.map(function (s) {
+        var t = s.h3.replace(/\s+/g, ' ').trim(), m = /^([\d.]+)\s*(.*)$/.exec(t) || [null, '', t];
+        var k = (document.getElementById(s.id) || { dataset: {} }).dataset.kind;
+        return '<a class="cc-card" href="#' + esc(encodeURIComponent(s.id)) + '"' + (k ? ' data-kind="' + k + '"' : '') + '>' +
+          (m[1] ? '<span class="cc-num">' + esc(m[1]) + '</span>' : '') +
+          '<span class="cc-title">' + esc(m[2]) + '</span>' +
+          '<span class="cc-pages">第 ' + (s.first + 1) + ' 頁 ›</span></a>';
+      }).join('') + '</div>';
+    p.items[0].el.after(cov);
+    p.items.push({ el: cov });
+    blocks.push(cov);
+  });
+
+  // index: element id -> page number (for TOC links and in-page anchors)
+  var pageOf = {};
+  pages.forEach(function (p, i) {
+    p.items.forEach(function (it) {
+      if (it.el.id && !(it.el.id in pageOf)) pageOf[it.el.id] = i;
+      it.el.querySelectorAll && it.el.querySelectorAll('[id]').forEach(function (x) {
+        if (!(x.id in pageOf)) pageOf[x.id] = i;
+      });
+    });
+  });
+
+  // ---- chrome: breadcrumb on top
+  var crumb = document.createElement('div');
+  crumb.className = 'pager-crumb';
+
+  // wide screens: the sidebar can be folded away; the choice is remembered
+  var toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'toc-toggle';
+  document.body.appendChild(toggle);
+  function setCollapsed(c) {
+    document.body.classList.toggle('toc-collapsed', c);
+    toggle.textContent = c ? '☰ 目錄' : '«';
+    toggle.setAttribute('aria-label', c ? '展開目錄' : '收合目錄');
+    toggle.setAttribute('aria-expanded', !c);
+    try { localStorage.setItem('toc-collapsed', c ? '1' : ''); } catch (e) {}
+  }
+  toggle.addEventListener('click', function () { setCollapsed(!document.body.classList.contains('toc-collapsed')); });
+  var saved = ''; try { saved = localStorage.getItem('toc-collapsed'); } catch (e) {}
+  setCollapsed(!!saved);
+  var tocEl = document.getElementById('TOC');
+  // narrow screens: the TOC sits above the content, so fold it behind a button
+  var tocWrap = document.createElement('details');
+  tocWrap.className = 'toc-wrap';
+  tocWrap.innerHTML = '<summary>☰ 目錄：跳到任一頁</summary>';
+  tocEl.before(tocWrap);
+  tocWrap.appendChild(tocEl);
+  var wide = matchMedia('(min-width: 1080px)');
+  function syncToc() { tocWrap.open = wide.matches; }
+  wide.addEventListener('change', syncToc);
+  syncToc();
+  tocEl.addEventListener('click', function (e) { if (e.target.closest('a') && !wide.matches) tocWrap.open = false; });
+  main.insertBefore(crumb, blocks[0]);
+
+  var current = -1;
+  function show(i, scrollTarget, activeId) {
+    i = Math.max(0, Math.min(pages.length - 1, i));
+    blocks.forEach(function (el) { el.hidden = true; });
+    pages[i].items.forEach(function (it) { it.el.hidden = false; });
+    hero.hidden = i !== 0;
+    current = i;
+
+    var p = pages[i];
+    // the header takes the section's colour (set by colors.html on the page's heading)
+    var head = p.items[0].el;
+    if (head.dataset.kind) crumb.dataset.kind = head.dataset.kind; else delete crumb.dataset.kind;
+    crumb.innerHTML = '<span>' + (head.dataset.label ? '<i class="kind">' + head.dataset.label + '</i>' : '') + (p.h2 ? (p.h3 ? p.h2 + ' › <b>' + p.h3 + '</b>' : '<b>' + p.h2 + '</b>') : '<b>前言</b>') + '</span><span class="crumb-r"><button type="button" class="src-btn sec" aria-expanded="false" data-sec="' + (p.h3 || p.h2 || '').replace(/"/g, '&quot;') + '">本節原文</button>' + (i + 1) + ' / ' + pages.length + '</span>';
+
+    // highlight the TOC entry of the section being shown
+    tocEl.querySelectorAll('a.active').forEach(function (a) { a.classList.remove('active'); });
+    // the clicked entry wins; otherwise the deepest heading at or before this page
+    function tocLink(id) { return tocEl.querySelector('a[href="#' + CSS.escape(id) + '"]'); }
+    var link = activeId && tocLink(activeId);
+    for (var k = i; k >= 0 && !link; k--)
+      for (var a = pages[k].anchors.length - 1; a >= 0 && !link; a--) link = tocLink(pages[k].anchors[a]);
+    if (link) { link.classList.add('active'); link.scrollIntoView({ block: 'nearest' }); }
+
+    if (scrollTarget) scrollTarget.scrollIntoView();
+    else window.scrollTo(0, 0);
+  }
+
+  function go(i) { history.replaceState(null, '', '#page-' + (i + 1)); show(i); }
+  // ← → walk the sections in document order
+  document.addEventListener('keydown', function (e) {
+    if (e.target.closest('input, textarea, dialog[open]') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'ArrowRight') go(current + 1);
+    if (e.key === 'ArrowLeft') go(current - 1);
+  });
+
+  // TOC and in-document links: jump to the page that holds the target
+  function openId(h) {
+    if (!(h in pageOf)) return false;
+    var target = document.getElementById(h), i = pageOf[h];
+    var lead = true;
+    for (var k = 0; k < pages[i].items.length && pages[i].items[k].el !== target; k++)
+      if (!/^H[1-6]$/.test(pages[i].items[k].el.tagName)) lead = false;
+    show(i, lead || i === 0 ? null : target, h);
+    return true;
+  }
+  function route() {
+    var h = decodeURIComponent(location.hash.slice(1));
+    var m = /^page-(\d+)$/.exec(h);
+    if (m) return show(+m[1] - 1);
+    if (!openId(h)) show(current < 0 ? 0 : current);
+  }
+  window.addEventListener('hashchange', route);
+  // handle TOC / in-page links directly, so clicking the entry you are already on still works
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[href^="#"]');
+    if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    var id = decodeURIComponent(a.getAttribute('href').slice(1));
+    if (!(id in pageOf)) return;
+    e.preventDefault();
+    history.replaceState(null, '', '#' + encodeURIComponent(id));
+    openId(id);
+  });
+  route();
+})();
+</script>

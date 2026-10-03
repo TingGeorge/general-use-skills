@@ -1,0 +1,40 @@
+<script>
+// Document-specific rules for this page. Every field is optional; delete what the document does not use.
+// A worked example (a PRD with reference codes, note markers, numbered cards): references/example/config.html
+window.CANVAS = {
+  // who added diagrams / tiles, shown when 原文 has no source lines for a block
+  agent: 'Claude',
+
+  // reference codes the document writes in brackets, e.g. (D-12、R:C-29) → small chips
+  // code: a regex source for one code; chip(code, previousResult) → { cls: 'r' | 'd' | 'c', title }
+  // refs: {
+  //   code: '[A-Z]-\\d+',
+  //   chip: function (c, prev) { return { cls: 'r', title: '…' }; },
+  //   legend: [['r', 'D-12', 'what this code family means']]
+  // },
+
+  // marker characters: mark〔text〕 → highlighted note, a bare mark → a flag chip.
+  // cls 'y' = gold (added or interpreted by the agent, needs confirmation); 'o' = dashed red (open, undecided)
+  // notes: [
+  //   { mark: '🟡', cls: 'y', note: 'Claude 補充', flag: '需確認', meaning: 'tile note' },
+  //   { mark: '⬜', cls: 'o', note: '待決', flag: '待決', legend: '還沒決定', meaning: 'tile note' }
+  // ],
+
+  // a table whose first column always matches this becomes ID cards (ID pill + title + fields)
+  // idCol: /^[A-Z]{1,4}-?\d+(?:[.-]\d+)*$/,
+  // cardTags: function (id, n) { return n >= 13 ? [{ cls: 'ext', text: '延伸' }] : []; },   // cls 'ext' or 'new'
+  // deleted: /已刪除/,                       // a card whose title matches is shown faded and dashed
+
+  // a two-column table whose first header is `head` becomes before → after cards
+  // beforeAfter: { head: '原構想', before: '原本', after: '本版' },
+
+  // section colours: { key: [legend label, hue] } + kindOf(h2 text, h3 text) → key.
+  // hues: pink teal gray blue violet cyan slate orange green olive red purple brown gold
+  // Default: every chapter (h2) gets its own hue, labelled with its title.
+  // kinds: { goal: ['目標', 'pink'], open: ['待決', 'red'] },
+  // kindOf: function (h2, h3) { return /^1\b/.test(h2) ? 'goal' : ''; },
+
+  // overview tiles on the first page: [label, value, note, kind]. x = { n(selector) → count, cids: [ID pills], stats: { y, o } }
+  // tiles: function (x) { return [['卡片', x.n('.card') + ' 張', '…']]; }
+};
+</script>

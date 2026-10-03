@@ -1,0 +1,66 @@
+<style>
+/* ---------- reading type: prose in a proportional face; codes, IDs and small labels stay mono ---------- */
+main.content {
+  --font-text: -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-text); font-size: 16px; line-height: 1.8; letter-spacing: .01em;
+  text-wrap: pretty;        /* no single character stranded on the last line */
+  text-autospace: normal;   /* a hair of space between 中文 and Latin where the source has none */
+}
+main.content :is(code, .ref, .mk, .cid, .tag, .flabel, .kn-label, .lg-t, .src-btn, .zoom-btn, .pager-crumb, .cc-num) {
+  font-family: var(--font-mono);
+}
+main.content :is(strong, b) { font-weight: 600; }
+/* diagrams were measured with the old body metrics: keep them, or node text clips */
+main.content .mermaid { line-height: 1.55; letter-spacing: -0.01em; text-autospace: no-autospace; }
+
+/* text inside blocks: one size, one rhythm */
+.card .field, .blocks > li, .step-chain > li, .steps-tail { font-size: 15px; line-height: 1.8; }
+.card .field + .field { margin-top: 12px; }
+.card .flabel { margin-bottom: 4px; }
+.sx-list > li { line-height: inherit; margin: 4px 0; }
+.sx-list > li.ns { margin-top: 12px; }
+.sx-list > li::before { top: calc(.9em - 3px); }
+main.content li > p { margin: 0; }
+main.content li > p + p { margin-top: 8px; }
+main.content blockquote { padding: 28px 32px; line-height: 1.8; }
+@media (max-width: 640px) { main.content h2 { font-size: 30px; } main.content blockquote { padding: 22px 20px; } }
+
+/* inline code: a soft box that wraps cleanly, not a pill that breaks into three */
+main.content :not(pre) > code {
+  font-size: .86em; padding: .12em .45em; border-radius: 6px; background: rgba(255, 255, 255, .7);
+  border-color: color-mix(in srgb, var(--color-ash) 80%, transparent);
+}
+main.content :not(pre) > code:not(.nw) { border-color: transparent; background: rgba(255, 255, 255, .85); }
+
+/* reference chips keep a little air from the word before them */
+.refs { margin-left: .2em; }
+.refs:first-child { margin-left: 0; }
+
+/* notes: a quiet highlight inline; a note that closes its sentence becomes a small callout under it */
+.claude-note, .open-note { padding: .1em .3em; border-radius: 4px; }
+.claude-note.as-block, .open-note.as-block {
+  display: block; margin: 8px 0 2px; padding: 8px 12px 9px; border-radius: 10px; font-size: .94em; line-height: 1.75;
+}
+.claude-note.as-block { background: rgba(236, 218, 152, .26); box-shadow: inset 3px 0 0 #d9c26a; }
+.open-note.as-block { box-shadow: inset 3px 0 0 #d0533a; }
+</style>
+<script>
+// Diagram first, then text: a summary diagram moves up to the start of the text run it closes
+// (stops at the section heading or the previous diagram). Anchors are taken before anything moves.
+(function () {
+  var stop = function (el) { return !el || /^H[1-3]$/.test(el.tagName) || el.matches('.mermaid, .steps, .has-steps'); };
+  [].map.call(document.querySelectorAll('main.content > .mermaid'), function (dg) {
+    var first = null;
+    for (var el = dg.previousElementSibling; !stop(el); el = el.previousElementSibling) first = el;
+    return [dg, first];
+  }).forEach(function (m) { if (m[1]) m[1].before(m[0]); });
+})();
+
+// A note that ends its block (nothing but punctuation after it) is shown as a callout under the text.
+document.querySelectorAll('main.content .claude-note, main.content .open-note').forEach(function (n) {
+  var after = '', before = '', s;
+  for (s = n.nextSibling; s; s = s.nextSibling) after += s.textContent;
+  for (s = n.previousSibling; s; s = s.previousSibling) before += s.textContent;
+  if (/^[\s。；，、）)]*$/.test(after) && before.trim() && n.textContent.length > 16) n.classList.add('as-block');
+});
+</script>
