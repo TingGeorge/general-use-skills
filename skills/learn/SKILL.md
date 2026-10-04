@@ -10,7 +10,7 @@ Build **one self-contained HTML study guide** that a beginner can use to score h
 The reader is a visual learner: long walls of text are a burden. Show it with color, diagrams and things to click; keep prose short.
 
 Start from [`assets/template.html`](assets/template.html) — it already holds the whole look (CSS, KaTeX, layout script, code highlighter, plot helper).
-[`references/example-algorithms-quiz1.html`](references/example-algorithms-quiz1.html) is a finished guide built with this skill — copy patterns from it (demos, figures, derivations) instead of reinventing them.
+[`references/example-algorithms-quiz1.html`](references/example-algorithms-quiz1.html) is a finished guide (Algorithms Quiz 1, Ch1–2-2) — copy its demos, derivations, answer templates and in-page self-check instead of reinventing them. It differs from the default in two ways: its main text is Traditional Chinese (that session asked for it), and it has its own flat CSS rather than the template's chapter banners. Take the patterns from it, and take the language and layout from this file and the template.
 
 ## Inputs to confirm
 
@@ -28,6 +28,7 @@ From the user's message, pin down — ask only if missing:
 - Old `.ppt` → `soffice --headless --convert-to pptx` into a temp dir first, then `markitdown`.
 - Slide formulas are often images and get lost in conversion: rebuild them from the slide's surrounding steps and notes.
 - Read only what is in scope. Note out-of-scope topics for the footer.
+- Long tool output can get compressed or truncated. Write the markdown to a file, strip blank and image lines (`grep -v -E '^\s*$|^!\[|^<!--'`), then read it in line ranges (`sed -n '1,300p'`) until you have seen every slide.
 
 ### 2. Analyze the past exams
 
@@ -39,11 +40,17 @@ Read every exam image/PDF. Produce:
 
 ### 3. Verify the math before writing it
 
-Every formula, closed form, example and worked table must be checked by computer (a short Python script: brute force over all permutations, exhaustive search, recompute the example). Never ship an unverified derivation; say in the page what was checked ("verified by exhaustive search").
+Every formula, closed form, example and worked table must be checked by computer (brute force over all permutations, exhaustive search, recompute the example). Never ship an unverified derivation; say in the page what was checked ("verified by exhaustive search").
+
+Put the checks **inside the page**: a self-check script at the end that calls the demos' own functions and compares them to every number the text teaches (e.g. the slide's inversion table, the first quick-sort pass, $X_n = H_n - 1$ for small $n$, the knapsack optimum, D&C result = brute force on random inputs). Log failures with `console.error` and show a footer badge "✔ self-check: N passed". Then the demos and the text cannot drift apart.
+
+When a demo implements the slide pseudocode, make it reproduce the slide's worked trace exactly. Literal pseudocode often needs extra guards (e.g. the textbook quick-sort partition needs `i < j` checks inside the inner loops, or the trace for `3 6 1 4 5 2` breaks).
 
 ### 4. Build the page from the template
 
 Copy `assets/template.html` to the output folder, fill every `{{…}}`, replace the EXAMPLE blocks with real content, delete what is unused.
+
+Never overwrite or read existing files in the output folder unless the user says to. If `<exam>.html` already exists, choose a new name (e.g. `quiz1-guide.html`).
 
 **Structure** (flat inside `<main>`; the layout script groups it):
 
@@ -74,7 +81,9 @@ Copy `assets/template.html` to the output folder, fill every `{{…}}`, replace 
 - Code: `<pre class="code" data-file="name.pseudo">` → Cursor-style dark editor with colors and line numbers. Edit the `KW` set for the course's keywords. Comments with `//`, aligned, short.
 - Plain traces / ASCII sketches stay in a light `<pre>`.
 
-**Style rules** (already in the template — keep them):
+**Style override:** if the user names a style ("3b1b style") or pastes a style reference, it replaces the template's look. Map its tokens onto the template's CSS variables (canvas, surfaces, ink, fonts, radii, button shapes), and recolor the JS palette used by canvas/SVG demos too. Obey its color restrictions. Example: in the ElevenLabs reference, violet/orange appear only inside demos (the compared item, the pivot, the A/B halves) and never in text; emphasis becomes ink weight 500, and category tags become a neutral pill with a small colored dot. Don't add decorations that look clickable but do nothing (e.g. a play button on a hero sphere).
+
+**Style rules** (default, already in the template — keep them unless overridden):
 
 - Warm eggshell / taupe base, Inter, whisper-weight (300) headings, pill buttons, 20–24 px radii, hairline borders.
 - Color is for meaning: chapter colors for regions, green/amber/red for exam-answer/key/trap, green→red for complexity. No decorative gradients beyond the hero sphere.
@@ -87,5 +96,7 @@ Copy `assets/template.html` to the output folder, fill every `{{…}}`, replace 
 - Cheat sheet: one complexity table, one classification table, the key formulas.
 
 ### 6. Hand off
+
+Before handing off, load the page once and confirm the self-check badge passes and the KaTeX math rendered with no raw `$…$` left. Browser tools may block `file://`: serve the output folder with `python3 -m http.server <port>`, and stop the server when done.
 
 Tell the user the file path, what each chapter contains, the list of demos/diagrams, what was verified by computer, and anything uncertain (e.g. formulas reconstructed from slide images). The user reviews the UI themselves and will report anything to change — do not run a screenshot/fix loop unless asked.
