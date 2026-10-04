@@ -1,6 +1,6 @@
 ---
 name: learn
-description: Crash-course exam tutor. Reads the teacher's materials (slides, PDFs) and past exam papers, then builds one visual, interactive HTML study guide that gets a beginner a high score on the coming exam — color-coded chapters, lesson cards, diagrams, interactive demos, LaTeX math, Cursor-style code, mock quizzes and a cheat sheet. English text with Traditional Chinese notes on hard concepts.
+description: Crash-course exam tutor. Reads the teacher's materials (slides, PDFs) and past exam papers, then uses 3b1b style to build one complete, detailed, easy-to-read visual and interactive HTML study guide that gets a beginner a high score on the coming exam — color-coded chapters, lesson cards, diagrams, interactive demos, LaTeX math, Cursor-style code, mock quizzes and a cheat sheet. English text with Traditional Chinese notes on hard concepts.
 disable-model-invocation: true
 ---
 
@@ -8,6 +8,22 @@ disable-model-invocation: true
 
 Build **one self-contained HTML study guide** that a beginner can use to score high on a specific exam, fast.
 The reader is a visual learner: long walls of text are a burden. Show it with color, diagrams and things to click; keep prose short.
+
+**The goal, in the user's words:** "Using 3b1b style to build a complete, detailed and easy to read and understand website guide for a beginner to get high score in the exam." Every rule below serves that sentence.
+
+## 3b1b style = how to teach (always on)
+
+Teach the way 3Blue1Brown explains math: the reader should *see* why a result is true before reading the proof.
+
+- **Intuition first.** Each lesson opens with the picture or everyday analogy (insertion sort = sorting playing cards in your hand; binary search = every question throws away half), then the formal definition, then the derivation, then the exam answer.
+- **One visual idea per concept.** Find the single picture that makes it obvious: the recursion tree whose levels each cost $n$, $c\cdot g(n)$ overtaking $f(n)$ after $n_0$, the median line splitting the points into A and B.
+- **Let the reader move it.** Sliders, step buttons and clickable nodes, with the numbers on screen updating live (counters, sums, $n_0$). Let them break things: e.g. drag $c$ below the leading coefficient and watch $n_0$ disappear.
+- **Show the result before you prove it.** Show the data first (e.g. enumerate every permutation and see that the average is $H_n-1$), then derive why.
+- **Derive in small steps.** No skipped algebra. Every line follows visibly from the one before; say in a few words which trick each step uses ("subtract (2) from (1)", "telescoping", "arithmetic series").
+
+**Complete** means every in-scope topic in the slides is covered, every derivation is written out in full, and every recurring past-exam question has a ready-to-copy answer. **Detailed** means best, worst and average case where the slides give them, plus each one's derivation. **Easy to read** means short paragraphs with one idea each, plain words, and a hard term explained the first time it appears.
+
+The *look* stays the template's (or the user's style override). Use the dark Manim look only if the user asks for 3b1b's *visuals*: near-black canvas with blue `#58C4DD`, yellow `#FFE066`, green `#83C167` and red `#FC6255` as meaning colors.
 
 Start from [`assets/template.html`](assets/template.html) — it already holds the whole look (CSS, KaTeX, layout script, code highlighter, plot helper).
 [`references/example-algorithms-quiz1.html`](references/example-algorithms-quiz1.html) is a finished guide (Algorithms Quiz 1, Ch1–2-2) — copy its demos, derivations, answer templates and in-page self-check instead of reinventing them. It differs from the default in two ways: its main text is Traditional Chinese (that session asked for it), and it has its own flat CSS rather than the template's chapter banners. Take the patterns from it, and take the language and layout from this file and the template.
