@@ -89,6 +89,23 @@ Inline SVG, where a picture shows the mechanism better than text: a flow with de
 - Use colours consistently and say what they mean in the caption when it is not obvious.
 - Work out the geometry before writing it. A CJK character is about 13px wide (14px in `.t`); Latin and mono characters about 7px. Text fits inside its box with 10px to spare. Arrows start and end on box edges and do not cross boxes. Labels do not sit on a line or on another label. Everything stays inside the viewBox.
 
+### A diagram that needs more room
+
+Add `class="zoom"` to a `<figure>` and the page puts a button on it that opens the figure over the whole window (Esc closes it). Use it for a diagram that is readable in the page but nicer large.
+
+A zoom figure may hold two drawings of the same thing: `<div class="scroll brief">` is shown in the page and `<div class="scroll detail">` only in the window. Use the pair when the full picture cannot fit the page width without becoming cramped: the brief one keeps what the reader needs to follow the text, the detailed one has everything. `data-open` and `data-close` on the figure set the button's two labels, so the label can say what opening adds ("Show all columns") and not just "Enlarge". Opening a figure that only gets bigger gives the reader nothing new, so when you have a detail drawing, make sure it really shows more.
+
+### ER diagram for database pages
+
+A page about a database schema gets one ER diagram of all its tables, near the top. Readers find one picture easier than a figure per group, and what makes a single picture unreadable is listing every column, not the number of tables.
+
+`scripts/er_diagram.py SPEC.json` draws it and prints the `<figure class="zoom">` to paste into the fragment: the brief drawing lists only key columns (PK, FK, UQ) with a count of the rest, the detailed one lists every column with its type. The file's docstring describes the spec. What matters when writing the spec:
+
+- Fill `columns` from the schema itself with a small script (migrations, a schema dump), not by typing; a diagram that disagrees with the SQL is worse than none.
+- The layout wants a hub: the table most others point at goes in the middle as one tall box, and every link to it is a straight line. Put related tables next to each other and give each group one colour. A link that skips the hub only works between two tables stacked in the same column. If the schema has no clear hub, draw it by hand in the same style.
+- Line ends are crow's-foot marks (`one`, `many`, `maybe`); derive them from the constraints: a foreign key that is also the whole primary key or unique is `maybe` on its own side, a nullable foreign key is `maybe` on the far side.
+- Translate the `text` labels into the page's language, write the caption (what the colours mean, composite keys, on-delete rules), and above the figure explain PK / FK / UQ and the line ends in a sentence each for a reader new to ER diagrams.
+
 Other building blocks from the shell: `<div class="tbl"><table>…</table></div>` for tables, `<p class="note">` for a side note.
 
 ## Before you finish

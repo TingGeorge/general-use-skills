@@ -65,6 +65,19 @@ td .skip { color: var(--gold); }
 figure { margin: 18px 0 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
 figure .scroll { overflow-x: auto; }
 figure svg { display: block; width: 100%; min-width: 560px; height: auto; }
+
+/* <figure class="zoom"> can be opened over the whole window. It may hold two drawings: .brief for the page, .detail for the window */
+figure.zoom { position: relative; padding-top: 44px; }
+figure.zoom .detail, figure.zoom.full .brief:not(:only-of-type) { display: none; }
+figure.zoom.full .detail { display: block; }
+.zoom-btn { position: absolute; z-index: 1; top: 10px; right: 10px; font-family: var(--font-body); font-size: 0.78rem; line-height: 1.5; padding: 2px 10px; border: 1px solid var(--blue); border-radius: 4px; background: var(--blue-tint); color: var(--blue); cursor: pointer; }
+.zoom-btn:hover { background: var(--blue); color: var(--bg); }
+.zoom-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+figure.zoom.full { position: fixed; z-index: 40; inset: 0; margin: 0; border: 0; border-radius: 0; overflow: auto; padding: 44px max(20px, env(safe-area-inset-right, 0px)) 40px max(20px, env(safe-area-inset-left, 0px)); }
+figure.zoom.full .zoom-btn { position: fixed; top: 14px; right: 22px; }
+figure.zoom.full svg { width: min(100%, 1280px); margin: 0 auto; }
+figure.zoom.full figcaption { max-width: 1280px; margin-inline: auto; }
+body:has(figure.zoom.full) { overflow: hidden; }
 figcaption { font-size: 0.87rem; color: var(--muted); margin-top: 8px; line-height: 1.6; }
 
 svg text { font-family: var(--font-body); fill: var(--fg); font-size: 13px; }
@@ -335,6 +348,24 @@ for (const el of document.querySelectorAll('.wrap svg text')) {
 
 let active = null;
 
+// Diagrams marked class="zoom" can fill the window. Opening a code ref from there goes back to the page, where the code pane is
+function setFull(fig) {
+  for (const f of document.querySelectorAll('figure.zoom')) {
+    const on = f === fig;
+    f.classList.toggle('full', on);
+    f.querySelector('.zoom-btn').textContent = on ? f.dataset.close || L.zoomClose : f.dataset.open || L.zoomOpen;
+    f.querySelector('.zoom-btn').setAttribute('aria-pressed', String(on));
+  }
+}
+for (const f of document.querySelectorAll('figure.zoom')) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'zoom-btn';
+  b.addEventListener('click', () => setFull(f.classList.contains('full') ? null : f));
+  f.prepend(b);
+}
+setFull(null);
+
 function clearMarks() {
   document.querySelector('.ref.cur')?.classList.remove('cur');
   active?.classList.remove('spot');
@@ -351,11 +382,13 @@ function openRef(el) {
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-ref]');
+  if (el) setFull(null);
   if (el) openRef(el);
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') pane.classList.remove('open');
+  if (e.key === 'Escape') setFull(null);
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[data-ref]')) {
     e.preventDefault();
     openRef(e.target);

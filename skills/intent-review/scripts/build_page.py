@@ -20,7 +20,7 @@ VOID = {'br', 'hr', 'img', 'meta', 'link', 'input', 'path', 'rect', 'circle', 'l
 LABELS = {
     'zh-TW': {
         'code': '程式碼', 'grip': '調整程式欄寬度', 'gripTitle': '拖曳調整寬度，按兩下還原', 'close': '關閉',
-        'wrapOn': '自動換行：開', 'wrapOff': '自動換行：關', 'show': '看程式：', 'newFile': '（新檔案）', 'range': '第 {} 行', 'sep': '、',
+        'wrapOn': '自動換行：開', 'wrapOff': '自動換行：關', 'show': '看程式：', 'zoomOpen': '放大', 'zoomClose': '縮小', 'newFile': '（新檔案）', 'range': '第 {} 行', 'sep': '、',
         'noteRev': '程式：<code>{}</code>。',
         'noteTree': '程式：目前工作目錄裡的檔案（還沒 commit 的修改也在內）。',
         'noteUse': '右邊是完整的程式檔。按每一段標題旁的「看程式」，右邊會換到那段程式，相關的行左邊有金色線，其他行變淡；捲動頁面不會改變右邊的內容。點任何 <code>檔名:行號</code> 或圖上的方框也可以。',
@@ -28,7 +28,7 @@ LABELS = {
     },
     'en': {
         'code': 'Code', 'grip': 'Resize the code pane', 'gripTitle': 'Drag to resize, double-click to reset', 'close': 'Close',
-        'wrapOn': 'Wrap: on', 'wrapOff': 'Wrap: off', 'show': 'Show code: ', 'newFile': ' (new file)', 'range': 'lines {}', 'sep': ', ',
+        'wrapOn': 'Wrap: on', 'wrapOff': 'Wrap: off', 'show': 'Show code: ', 'zoomOpen': 'Enlarge', 'zoomClose': 'Close', 'newFile': ' (new file)', 'range': 'lines {}', 'sep': ', ',
         'noteRev': 'Code: <code>{}</code>.',
         'noteTree': 'Code: the files in the working tree now, uncommitted changes included.',
         'noteUse': 'The right side holds the full source files. Press "Show code" beside a heading and the right side moves to that code: its lines get a gold bar on the left and the other lines fade. Scrolling the page never changes the right side. Any <code>file:line</code> or box in a diagram is clickable too.',

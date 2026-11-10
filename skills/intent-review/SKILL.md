@@ -78,6 +78,7 @@ The user reads and asks, in chat or in comments on the page. Your part:
 ## Files in this skill
 
 - `scripts/build_page.py`: checks a fragment and builds the page. `--selfcheck` runs its own test.
-- `assets/shell.html`: styles, the code pane (dark, wrap toggle, adjustable width, diff marks) and its script. Highlighting follows the file extension. Change the look here, then rebuild pages.
+- `scripts/er_diagram.py`: draws the ER diagram for a page about a database schema from a JSON spec (see "ER diagram" in `references/writing.md`). `--selfcheck` runs its own test.
+- `assets/shell.html`: styles, the code pane (dark, wrap toggle, adjustable width, diff marks), the open-in-window button for `figure.zoom`, and its script. Highlighting follows the file extension. Change the look here, then rebuild pages.
 - `references/writing.md`: how to write a fragment. Read before writing; give its path to page-writing subagents.
 - `references/example_fragment.html`: a finished fragment to copy structure and diagram markup from.
