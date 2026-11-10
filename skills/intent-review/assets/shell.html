@@ -1,0 +1,441 @@
+<title>@@TITLE@@</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap">
+<style>
+/* Layout: one reading column in the same look as the other backend plan pages. Every piece repeats three blocks (problem, method, why) around its diagram. Light only, static. */
+:root {
+  --bg: #F6F4EC;
+  --panel: #FFFFFF;
+  --fg: #1E2A36;
+  --muted: #5A6775;
+  --line: #D9D6C8;
+  --blue: #1D4E89;
+  --blue-tint: #E4ECF6;
+  --teal: #1B7A74;
+  --teal-tint: #DDEFEC;
+  --gold: #9A6A0E;
+  --gold-tint: #F7EBCB;
+  --rust: #A63D2F;
+  --rust-tint: #F6E2DD;
+  --gray-tint: #E9E8E1;
+  --code-bg: #EDEBE0;
+  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.75; }
+.wrap { max-width: 900px; margin: 0 auto; padding-block: 28px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.35; margin: 0; }
+h1 { font-size: 2rem; color: var(--blue); letter-spacing: 0.01em; }
+h2 { font-size: 1.4rem; color: var(--blue); border-bottom: 2px solid var(--gold); padding-bottom: 6px; margin-top: 52px; scroll-margin-top: 16px; }
+h3 { font-size: 1.08rem; color: var(--teal); margin-top: 24px; }
+p { margin: 10px 0 0; }
+.sub { color: var(--muted); margin: 6px 0 0; font-size: 0.95rem; }
+.note { font-size: 0.88rem; color: var(--muted); }
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+a { color: var(--blue); }
+a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 16px; font-size: 0.92rem; }
+
+.tbl { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; line-height: 1.6; }
+th, td { padding: 8px 11px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { background: var(--blue-tint); color: var(--blue); font-weight: 500; white-space: nowrap; }
+td.c, th.c { text-align: center; }
+td .yes { color: var(--teal); font-weight: 700; }
+td .no { color: var(--muted); }
+td .skip { color: var(--gold); }
+.num { font-variant-numeric: tabular-nums; }
+
+.parts { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+@media (min-width: 720px) { .parts { grid-template-columns: 1fr 1fr; } .parts .b.w { grid-column: 1 / -1; } }
+.b { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; min-width: 0; font-size: 0.93rem; line-height: 1.7; }
+.b h3 { margin: 0 0 4px; font-size: 1rem; font-family: var(--font-body); font-weight: 700; }
+.b.p h3 { color: var(--rust); }
+.b.m h3 { color: var(--blue); }
+.b.w h3 { color: var(--teal); }
+.b h4 { margin: 10px 0 0; font-size: 0.93rem; font-family: var(--font-body); font-weight: 700; color: var(--blue); }
+.b ul { margin: 4px 0 0; padding-left: 1.15em; }
+.b li + li { margin-top: 5px; }
+.b p:first-of-type { margin-top: 0; }
+
+figure { margin: 18px 0 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+figure .scroll { overflow-x: auto; }
+figure svg { display: block; width: 100%; min-width: 560px; height: auto; }
+figcaption { font-size: 0.87rem; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+
+svg text { font-family: var(--font-body); fill: var(--fg); font-size: 13px; }
+svg .t { font-weight: 700; font-size: 14px; }
+svg .m { font-family: var(--font-mono); font-size: 12px; fill: var(--muted); }
+svg .s { font-size: 12px; fill: var(--muted); }
+svg .lab { font-size: 12px; font-weight: 500; fill: var(--blue); }
+svg .mid { text-anchor: middle; }
+svg .end { text-anchor: end; }
+svg .r { fill: var(--rust); }
+svg .bk { fill: var(--blue); }
+svg .tl { fill: var(--teal); }
+.box { stroke-width: 1.4; }
+.bx-blue { fill: var(--blue-tint); stroke: var(--blue); }
+.bx-teal { fill: var(--teal-tint); stroke: var(--teal); }
+.bx-gold { fill: var(--gold-tint); stroke: var(--gold); }
+.bx-rust { fill: var(--rust-tint); stroke: var(--rust); }
+.bx-gray { fill: var(--gray-tint); stroke: var(--muted); }
+.bx-none { fill: none; stroke: var(--muted); stroke-dasharray: 5 4; }
+.arw { fill: none; stroke: var(--fg); stroke-width: 1.4; }
+.arw-r { fill: none; stroke: var(--rust); stroke-width: 1.3; stroke-dasharray: 4 3; }
+.arw-t { fill: none; stroke: var(--teal); stroke-width: 1.4; }
+.arw-g { fill: none; stroke: var(--gold); stroke-width: 1.4; }
+.head { fill: var(--fg); }
+.head-r { fill: var(--rust); }
+.head-t { fill: var(--teal); }
+.head-g { fill: var(--gold); }
+
+.steps { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 7px; counter-reset: s; font-size: 0.92rem; }
+.steps li { counter-increment: s; position: relative; padding-left: 34px; }
+.steps li::before { content: counter(s); position: absolute; left: 0; top: 2px; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; background: var(--blue-tint); color: var(--blue); font-size: 0.8rem; font-weight: 700; }
+.two { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+@media (min-width: 720px) { .two { grid-template-columns: 1fr 1fr; } }
+
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.92rem; }
+.strip .a { color: var(--gold); font-weight: 700; }
+
+/* Code sidebar: sticky right column on wide screens, a drawer opened by clicking a ref on narrow ones. */
+code.ref { color: var(--blue); cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+code.ref:hover, code.ref.cur { background: var(--gold-tint); }
+code.ref:focus-visible, svg text.ref:focus-visible, #code button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+svg text { pointer-events: none; }
+svg text.ref, svg rect.ref { pointer-events: auto; cursor: pointer; }
+svg text.m.ref { fill: var(--blue); text-decoration: underline dotted; }
+svg rect.ref:hover { stroke-width: 2.6; }
+.show { font-family: var(--font-body); font-size: 0.78rem; line-height: 1.5; padding: 2px 10px; border: 1px solid var(--blue); border-radius: 4px; background: var(--blue-tint); color: var(--blue); cursor: pointer; white-space: nowrap; }
+.show:hover, .spot > .show { background: var(--blue); color: var(--bg); }
+.show:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+h2 > .show { float: right; margin: 5px 0 0 10px; }
+
+/* The code pane is dark like an editor (VS Code Dark+); the tokens are re-pointed here so every rule below follows. */
+#code {
+  --bg: #1E1E1E; --panel: #1E1E1E; --fg: #D4D4D4; --muted: #858585; --line: #3C3C3C; --code-bg: #252526;
+  --blue: #569CD6; --blue-tint: #2A3B4D; --gold: #E2B93D; --gold-tint: rgba(226, 185, 61, 0.16);
+  color: var(--fg); color-scheme: dark;
+  display: none; flex-direction: column; min-width: 0; background: var(--panel); border-left: 1px solid var(--line);
+}
+#code.open { display: flex; position: fixed; z-index: 20; top: 0; right: 0; bottom: 0; width: min(94vw, var(--code-w, 640px)); box-shadow: -6px 0 24px rgba(30, 42, 54, 0.22); padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.c-tabs { display: flex; gap: 2px; overflow-x: auto; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--code-bg); flex: none; }
+.c-tabs button { font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.5; padding: 3px 8px; border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.c-tabs button:hover { background: var(--blue-tint); color: var(--blue); }
+.c-tabs button[aria-pressed="true"] { background: var(--blue); color: var(--bg); }
+.c-path { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px; font-size: 0.8rem; color: var(--muted); border-bottom: 1px solid var(--line); flex: none; }
+.c-path code { background: none; padding: 0; }
+#c-right { display: flex; align-items: center; gap: 10px; flex: none; color: var(--gold); font-weight: 500; }
+#c-close, #c-wrap { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--fg); cursor: pointer; }
+#c-body { flex: 1; min-height: 0; overflow: auto; position: relative; padding-block: 8px 40vh; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; }
+.ln { display: grid; grid-template-columns: 3.4em minmax(0, 1fr); }
+.no { text-align: right; padding-right: 0.9em; color: var(--muted); user-select: none; font-variant-numeric: tabular-nums; }
+.src { white-space: pre-wrap; overflow-wrap: anywhere; padding-right: 12px; }
+/* Focus lines keep their editor colours: a left bar and a faint lift mark them, and the lines outside the focus fade */
+.ln.on { background: #26282C; box-shadow: inset 3px 0 var(--gold); }
+#c-body:has(.on) .ln:not(.on) .src { opacity: 0.45; }
+.ln.on .no { color: var(--gold); font-weight: 700; }
+
+/* Wrapping off: every row takes the width of the longest line, and the line numbers stay put while the code scrolls sideways */
+#code.nowrap #c-body { display: grid; grid-template-columns: minmax(max-content, 1fr); align-content: start; }
+#code.nowrap .ln { grid-template-columns: 3.4em max-content; }
+#code.nowrap .src { white-space: pre; overflow-wrap: normal; }
+#code.nowrap .no { position: sticky; left: 0; z-index: 1; background: var(--panel); }
+#code.nowrap .ln.on .no { background: #26282C; box-shadow: inset 3px 0 var(--gold); }
+
+/* Thin scrollbars that match the dark pane */
+#c-body, .c-tabs { scrollbar-width: thin; scrollbar-color: #4A4A4A transparent; }
+#c-body::-webkit-scrollbar, .c-tabs::-webkit-scrollbar { width: 8px; height: 8px; }
+#c-body::-webkit-scrollbar-track, .c-tabs::-webkit-scrollbar-track, #c-body::-webkit-scrollbar-corner { background: transparent; }
+#c-body::-webkit-scrollbar-thumb, .c-tabs::-webkit-scrollbar-thumb { background: #4A4A4A; border-radius: 4px; }
+#c-body::-webkit-scrollbar-thumb:hover, .c-tabs::-webkit-scrollbar-thumb:hover { background: #6A6A6A; }
+
+#c-grip { position: absolute; z-index: 2; left: 0; top: 0; bottom: 0; width: 7px; cursor: col-resize; touch-action: none; }
+#c-grip:hover, #c-grip.drag, #c-grip:focus-visible { background: var(--blue); outline: none; }
+
+/* Diff marks: a green bar beside added or changed lines; removed lines sit in place on a red tint, without a number */
+.ln.add .no { box-shadow: inset -3px 0 #3FB950; }
+.ln.del { background: rgba(248, 81, 73, 0.13); }
+.ln.del .no { color: #F85149; }
+.ln.del .src { color: #D7A9A6; }
+#code.nowrap .ln.on.add .no { box-shadow: inset 3px 0 var(--gold), inset -3px 0 #3FB950; }
+#code.nowrap .ln.del .no { background: #3A2323; }
+.c-tabs button.chg::after { content: " \25CF"; color: #3FB950; }
+
+.hljs-keyword, .hljs-meta, .hljs-literal { color: #569CD6; }
+.hljs-string, .hljs-regexp { color: #CE9178; }
+.hljs-number { color: #B5CEA8; }
+.hljs-comment { color: #6A9955; }
+.hljs-title, .hljs-title.function_ { color: #DCDCAA; }
+.hljs-built_in, .hljs-type, .hljs-title.class_ { color: #4EC9B0; }
+.hljs-attr, .hljs-property, .hljs-variable, .hljs-params { color: #9CDCFE; }
+
+@media (min-width: 1200px) {
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, min(var(--code-w, 46%), calc(100% - 360px))); }
+  .wrap { max-width: none; margin: 0; padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: 24px; }
+  .parts, .two { grid-template-columns: 1fr; }
+  #code, #code.open { display: flex; position: sticky; top: 0; align-self: start; width: auto; height: 100vh; box-shadow: none; padding: 0; padding-right: env(safe-area-inset-right, 0px); }
+  #c-close { display: none; }
+}
+</style>
+
+<div class="split">
+<div class="wrap">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-r" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="at" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-t" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-g" d="M0 0L10 5L0 10z"/></marker>
+</defs></svg>
+@@BODY@@
+</div>
+
+<aside id="code" aria-label="code">
+  <div id="c-grip" role="separator" aria-orientation="vertical" tabindex="0"></div>
+  <div class="c-tabs" id="c-tabs"></div>
+  <div class="c-path"><code id="c-file"></code><span id="c-right"><span id="c-range"></span><button id="c-wrap" type="button" aria-pressed="true"></button><button id="c-close" type="button"></button></span></div>
+  <div id="c-body" tabindex="0"></div>
+</aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script id="src" type="application/json">@@SRC@@</script>
+<script>
+const SRC = JSON.parse(document.getElementById('src').textContent);
+const L = @@LABELS@@;
+const pane = document.getElementById('code');
+const body = document.getElementById('c-body');
+const tabs = document.getElementById('c-tabs');
+const wide = matchMedia('(min-width: 1200px)');
+
+pane.setAttribute('aria-label', L.code);
+document.getElementById('c-grip').setAttribute('aria-label', L.grip);
+document.getElementById('c-grip').title = L.gripTitle;
+document.getElementById('c-close').textContent = L.close;
+
+const esc = (t) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+
+// A token can span several lines (comments, template strings), so close and reopen its spans at each newline
+function toLines(html) {
+  const lines = [];
+  const open = [];
+  let cur = '';
+  for (const part of html.split(/(<span[^>]*>|<\/span>|\n)/)) {
+    if (part === '\n') {
+      lines.push(cur + '</span>'.repeat(open.length));
+      cur = open.join('');
+    } else {
+      if (part.startsWith('<span')) open.push(part);
+      else if (part === '</span>') open.pop();
+      cur += part;
+    }
+  }
+  lines.push(cur);
+  return lines;
+}
+
+const cache = {};
+function render(name) {
+  if (cache[name]) return cache[name];
+  const d = SRC[name];
+  const text = d.text.replace(/\n+$/, '');
+  const ext = name.split('.').pop();
+  const html = window.hljs && hljs.getLanguage(ext) ? hljs.highlight(text, { language: ext }).value : esc(text);
+
+  const add = new Set();
+  for (const [a, b] of d.add || []) for (let n = a; n <= b; n++) add.add(n);
+
+  // d.del[n] holds the removed lines that sat just before new line n
+  const gone = (n) =>
+    ((d.del || {})[n] || [])
+      .map((x) => '<div class="ln del"><span class="no">\u2212</span><span class="src">' + (esc(x) || ' ') + '</span></div>')
+      .join('');
+
+  const lines = toLines(html);
+  cache[name] =
+    lines
+      .map((l, i) => gone(i + 1) + '<div class="ln' + (add.has(i + 1) ? ' add' : '') + '" data-n><span class="no">' + (i + 1) + '</span><span class="src">' + (l || ' ') + '</span></div>')
+      .join('') + gone(lines.length + 1);
+  return cache[name];
+}
+
+function parse(ref) {
+  const m = /^([^\s:]+)(?::(\d+)(?:-(\d+))?)?$/.exec(ref.trim());
+  if (!m || !SRC[m[1]]) return null;
+  const from = m[2] ? Number(m[2]) : 0;
+  return { file: m[1], from, to: m[3] ? Number(m[3]) : from };
+}
+
+let current = '';
+let rows = [];
+function show(file, ranges) {
+  if (current !== file) {
+    body.innerHTML = render(file);
+    rows = body.querySelectorAll('.ln[data-n]');
+    current = file;
+    document.getElementById('c-file').textContent = SRC[file].path + (SRC[file].new ? L.newFile : '');
+    for (const b of tabs.children) b.setAttribute('aria-pressed', String(b.textContent === file));
+  }
+
+  for (const l of body.querySelectorAll('.on')) l.classList.remove('on');
+  for (const [a, b] of ranges) for (let n = a; n <= b; n++) rows[n - 1]?.classList.add('on');
+
+  // Removed lines belong to the focus when the line they sat before does
+  for (const d of body.querySelectorAll('.ln.del')) {
+    let n = d;
+    while (n?.classList.contains('del')) n = n.nextElementSibling;
+    if (n?.classList.contains('on')) d.classList.add('on');
+  }
+
+  document.getElementById('c-range').textContent = ranges.length
+    ? L.range.replace('{}', ranges.map(([a, b]) => (a === b ? a : a + '-' + b)).join(L.sep))
+    : '';
+
+  // Scroll only the code pane, never the page
+  const first = ranges.length ? rows[ranges[0][0] - 1] : null;
+  body.scrollTop = first ? Math.max(0, first.offsetTop - body.clientHeight * 0.22) : 0;
+}
+
+for (const name of Object.keys(SRC)) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = name;
+  b.setAttribute('aria-pressed', 'false');
+  if (SRC[name].new || SRC[name].add?.length || Object.keys(SRC[name].del || {}).length) b.classList.add('chg');
+  b.addEventListener('click', () => show(name, []));
+  tabs.append(b);
+}
+
+function mark(el, ref) {
+  el.classList.add('ref');
+  el.setAttribute('data-ref', ref);
+  el.setAttribute('role', 'button');
+  el.setAttribute('tabindex', '0');
+}
+
+for (const el of document.querySelectorAll('.wrap code')) if (parse(el.textContent)) mark(el, el.textContent);
+
+for (const el of document.querySelectorAll('.wrap svg text')) {
+  const ref = el.getAttribute('data-ref') || (el.classList.contains('m') && parse(el.textContent) ? el.textContent : null);
+  if (!ref) continue;
+  mark(el, ref);
+
+  // The box around the label is clickable too
+  let box = el;
+  while ((box = box.previousElementSibling) && box.tagName !== 'rect');
+  if (box) {
+    box.classList.add('ref');
+    box.setAttribute('data-ref', ref);
+  }
+}
+
+let active = null;
+
+function clearMarks() {
+  document.querySelector('.ref.cur')?.classList.remove('cur');
+  active?.classList.remove('spot');
+  active = null;
+}
+
+function openRef(el) {
+  const r = parse(el.getAttribute('data-ref'));
+  clearMarks();
+  el.classList.add('cur');
+  pane.classList.toggle('open', !wide.matches);
+  show(r.file, r.from ? [[r.from, r.to]] : []);
+}
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-ref]');
+  if (el) openRef(el);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') pane.classList.remove('open');
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[data-ref]')) {
+    e.preventDefault();
+    openRef(e.target);
+  }
+});
+
+document.getElementById('c-close').addEventListener('click', () => pane.classList.remove('open'));
+
+// Reader preferences: line wrapping and pane width. Remembered per browser; the page works the same without storage
+const prefs = {
+  get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+};
+
+const wrapBtn = document.getElementById('c-wrap');
+function setWrap(on) {
+  // Keep the same line at the top, since wrapping changes every line's height
+  const top = [...body.children].find((l) => l.offsetTop + l.offsetHeight > body.scrollTop);
+  pane.classList.toggle('nowrap', !on);
+  wrapBtn.setAttribute('aria-pressed', String(on));
+  wrapBtn.textContent = on ? L.wrapOn : L.wrapOff;
+  if (top) body.scrollTop = top.offsetTop;
+  if (on) body.scrollLeft = 0;
+  prefs.set('code-wrap', on ? '1' : '0');
+}
+wrapBtn.addEventListener('click', () => setWrap(pane.classList.contains('nowrap')));
+setWrap(prefs.get('code-wrap') !== '0');
+
+const grip = document.getElementById('c-grip');
+function setWidth(px) {
+  if (!px) {
+    document.documentElement.style.removeProperty('--code-w');
+    prefs.set('code-w', '');
+    return;
+  }
+  const w = Math.round(Math.max(320, Math.min(px, innerWidth - (wide.matches ? 360 : 24))));
+  document.documentElement.style.setProperty('--code-w', w + 'px');
+  prefs.set('code-w', String(w));
+}
+grip.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  grip.setPointerCapture(e.pointerId);
+  grip.classList.add('drag');
+});
+grip.addEventListener('pointermove', (e) => {
+  if (grip.hasPointerCapture(e.pointerId)) setWidth(pane.getBoundingClientRect().right - e.clientX);
+});
+for (const t of ['pointerup', 'pointercancel']) grip.addEventListener(t, () => grip.classList.remove('drag'));
+grip.addEventListener('dblclick', () => setWidth(0));
+grip.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') setWidth(pane.offsetWidth + 32);
+  if (e.key === 'ArrowRight') setWidth(pane.offsetWidth - 32);
+});
+if (Number(prefs.get('code-w'))) setWidth(Number(prefs.get('code-w')));
+
+// Each part gets one button for all its code. The pane changes only when the reader asks
+let first = null;
+for (const h of document.querySelectorAll('.wrap h2[data-focus]')) {
+  const [file, lines] = h.getAttribute('data-focus').split(':');
+  const ranges = lines.split(',').map((r) => {
+    const [from, to = from] = r.split('-').map(Number);
+    return [from, to];
+  });
+
+  first ||= [file, ranges];
+
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'show';
+  b.textContent = L.show + file;
+  b.addEventListener('click', () => {
+    clearMarks();
+    active = h;
+    h.classList.add('spot');
+    pane.classList.toggle('open', !wide.matches);
+    show(file, ranges);
+  });
+  h.prepend(b);
+}
+
+if (first) show(...first);
+else show(Object.keys(SRC)[0], []);
+</script>

@@ -1,0 +1,386 @@
+<!-- sources: app/server/src/m0-foundation/auth.ts, app/server/src/m2-account/reset-password.ts, app/server/db/migrations/001_m0.sql, app/server/db/migrations/003_m2.sql, app/server/src/app.ts, app/server/src/m0-foundation/middleware.ts -->
+<h1>Auth Design</h1>
+<p class="sub">登入與身分：每一段想解決什麼、怎麼做、為什麼這樣做</p>
+
+<nav class="toc" aria-label="本頁目錄">
+  <a href="#overview">總覽</a>
+  <a href="#setup">1 設定與登入憑證</a>
+  <a href="#paths">2 開放的路徑</a>
+  <a href="#errors">3 錯誤轉換</a>
+  <a href="#rate">4 擋猜密碼</a>
+  <a href="#tables">5 帳號資料表</a>
+  <a href="#reset">6 團隊重設密碼</a>
+  <a href="#spec">和規格的差異</a>
+  <a href="#adr">決定清單</a>
+  <a href="#limits">已知上限</a>
+</nav>
+
+<h2 id="overview">總覽</h2>
+<p>登入用 Better Auth，這是一個跑在後端程式裡的登入套件，帳號和登入狀態存在同一個 PostgreSQL。這一頁講 Better Auth 怎麼設定、對外開哪幾條路徑、它的錯誤怎麼變成我們的格式，以及團隊用來重設密碼的指令。每一次請求的登入檢查（<code>requireAuth</code>）屬於請求管線，註冊屬於 Account，這裡只在用到時提一句。這頁拆成 6 段，每段都有三格：<b>要解決的問題</b>、<b>怎麼做</b>、<b>為什麼這樣做</b>。</p>
+<div class="tbl"><table>
+  <tr><th>段落</th><th>要解決的問題</th><th>做法</th><th>檔案</th></tr>
+  <tr><td>1 設定與登入憑證</td><td>用使用者名稱加密碼登入，不寄信，前後端網域不同</td><td>Better Auth 加 <code>bearer</code>、<code>username</code> 外掛，關掉公開註冊</td><td><code>auth.ts</code></td></tr>
+  <tr><td>2 開放的路徑</td><td>Better Auth 預設開很多路徑，PWA 只用得到三條</td><td>自己寫白名單，其他回 404</td><td><code>auth.ts</code></td></tr>
+  <tr><td>3 錯誤轉換</td><td>Better Auth 的錯誤格式和我們不同，登入失敗不能說哪裡錯</td><td><code>authError</code> 依序判斷，轉成 <code>AppError</code></td><td><code>auth.ts</code></td></tr>
+  <tr><td>4 擋猜密碼</td><td>同一個來源短時間內不能一直試密碼</td><td>Better Auth 內建 rateLimit，登入每個 IP 每分鐘 10 次</td><td><code>auth.ts</code></td></tr>
+  <tr><td>5 帳號資料表</td><td>存帳號和登入狀態，刪帳號時連帶刪資料</td><td>四張表放進我們自己的 migration</td><td><code>001_m0.sql</code></td></tr>
+  <tr><td>6 團隊重設密碼</td><td>沒有 email，忘記密碼要由團隊人工處理</td><td>團隊電腦上跑的指令，確認後換成臨時密碼</td><td><code>reset-password.ts</code></td></tr>
+</table></div>
+
+<h2 id="setup" data-focus="auth.ts:12-57">1 設定與登入憑證</h2>
+<div class="parts">
+  <div class="b p"><h3>要解決的問題</h3><p>使用者用「使用者名稱加密碼」登入，系統不寄任何信，所以帳號沒有真的 email。PWA 和後端在不同網域，登入憑證要能跨網域帶過來。帳號只能由後端建立，不開放公開註冊（TS-003 §5.1、TS-001 §5.1）。</p></div>
+  <div class="b m"><h3>怎麼做</h3><p><code>auth.ts:21-68</code> 呼叫一次 <code>betterAuth({...})</code>，把所有設定放在一起，下表列出和這一段有關的項目。登入成功後，PWA 拿到一組 token，之後每個請求帶在 <code>Authorization: Bearer</code> 標頭裡。伺服器用 token 去 <code>sessions</code> 表找到對應的 session。session 是一列資料，代表「這支手機已登入」。</p><h4>這樣做的結果</h4><ul>
+    <li>登入回應的 body 裡有 <code>token</code>，不使用 cookie（<code>test/m0-db.test.ts</code> 的登入測試）。</li>
+    <li>使用者名稱註冊後不能改，這件事設了 <code>immutableUsername</code>，但 Better Auth 1.7 遇到 bearer token 時這個檢查不生效。真正擋住改名的是第 2 段不開放 <code>update-user</code>（<code>auth.ts:38-40</code>、ADR-0107）。</li>
+    <li>註冊在伺服器端呼叫 <code>auth.api.signUpEmail</code>，不受 <code>disabledPaths</code> 影響（<code>auth.ts:1-3</code>、ADR-0106），詳細屬於 Account。</li>
+    <li>沒設 <code>DATABASE_URL</code>（不碰資料庫的測試）時，啟動不檢查表（<code>auth.ts:56-57</code>）。</li>
+    <li>每個請求的登入檢查用 <code>auth.api.getSession</code> 查 session（<code>middleware.ts:51-59</code>），屬於請求管線。</li>
+  </ul></div>
+  <div class="b w"><h3>為什麼這樣做</h3><ul>
+    <li><b>Bearer token，不用 cookie：</b>前後端網域不同，不同網域的 cookie 算第三方 cookie，iPhone Safari 預設會擋，使用者可能一直被登出（ADR-0002 的 ADR-0009 段）。</li>
+    <li><b><code>bearer</code> 排第一個：</b>先把 token 換成 session（<code>auth.ts:32</code>）。</li>
+    <li><b>Better Auth 自己用 <code>pg</code> 連線池：</b>Better Auth 不支援 <code>Bun.sql</code>，連的還是 <code>app</code> 帳號（<code>auth.ts:22</code>、ADR-0002 的 ADR-0003 段）。</li>
+    <li><b>email 填佔位值：</b><code>username</code> 外掛要靠 email 加密碼的帳號機制，系統又不寄信（<code>auth.ts:29</code>）。</li>
+    <li><b>關掉 <code>displayUsername</code>：</b>顯示名稱是 M2 自己的欄位，避免有兩個「顯示名稱」（<code>auth.ts:41</code>）。</li>
+    <li><b>表名用複數：</b><code>user</code> 是 PostgreSQL 的保留字（<code>auth.ts:51</code>、ADR-0106）。</li>
+    <li><b>讀 <code>cf-connecting-ip</code>：</b>請求都經過 Cloudflare Tunnel，真實 IP 在這個標頭（<code>auth.ts:59-60</code>）。</li>
+    <li><b>365 天沒用才過期、每天第一次使用時延長：</b>文件沒寫理由，TS-001 §7 只把它列為 v0 想法（<code>auth.ts:48-49</code>）。</li>
+    <li><b>使用者名稱 4 到 20 字、密碼 8 到 128 字：</b>文件沒寫理由，TS-003 §7 只把它列為 v0 想法（ADR-0106）。</li>
+  </ul></div>
+</div>
+
+<div class="tbl"><table>
+  <tr><th>設定</th><th>值</th><th>行</th></tr>
+  <tr><td><code>database</code></td><td>自己的 <code>pg</code> 連線池，連 <code>DATABASE_URL</code></td><td><code>auth.ts:23</code></td></tr>
+  <tr><td><code>trustedOrigins</code></td><td>讀 <code>APP_ORIGIN</code>，逗號分隔，和來源檢查共用</td><td><code>auth.ts:14-19</code>、<code>auth.ts:27</code></td></tr>
+  <tr><td><code>emailAndPassword</code></td><td>開啟，密碼長度用 <code>@app/shared</code> 的 <code>PASSWORD_RULE</code></td><td><code>auth.ts:30</code></td></tr>
+  <tr><td><code>plugins</code></td><td><code>bearer()</code> 在前，<code>username()</code> 在後，名稱規則用 <code>USERNAME_RULE</code></td><td><code>auth.ts:31-43</code></td></tr>
+  <tr><td><code>disabledPaths</code></td><td><code>/sign-up/email</code></td><td><code>auth.ts:46</code></td></tr>
+  <tr><td><code>session</code></td><td>表名 <code>sessions</code>，<code>expiresIn</code> 365 天，<code>updateAge</code> 1 天</td><td><code>auth.ts:49</code></td></tr>
+  <tr><td>表名</td><td><code>users</code>、<code>accounts</code>、<code>verifications</code></td><td><code>auth.ts:52-54</code></td></tr>
+  <tr><td><code>advanced.database</code></td><td>id 用 uuid；有設 <code>DATABASE_URL</code> 才檢查表</td><td><code>auth.ts:57</code></td></tr>
+</table></div>
+
+<h2 id="paths" data-focus="auth.ts:70-82">2 開放的路徑</h2>
+<div class="parts">
+  <div class="b p"><h3>要解決的問題</h3><p>Better Auth 的處理器預設開很多路徑，例如 <code>update-user</code>（會改到使用者名稱，TS-003 §2 規定註冊後不能改）、<code>sign-in/email</code>、<code>list-sessions</code>。PWA 用得到的只有登入、登出、改密碼。</p></div>
+  <div class="b m"><h3>怎麼做</h3><p><code>authRoutes</code>（<code>auth.ts:75-82</code>）接住 <code>/api/auth</code> 底下的每個請求，去掉前綴後組成「方法 路徑」，例如 <code>POST /sign-out</code>。這個字串不在 <code>OPEN</code> 集合裡就丟 <code>NOT_FOUND</code>（<code>auth.ts:77</code>），在的話才交給 <code>auth.handler</code>（<code>auth.ts:79</code>）。<code>OPEN</code> 裡有 3 條（<code>auth.ts:73</code>）。</p><h4>這樣做的結果</h4><ul>
+    <li><code>authRoutes</code> 掛在登入檢查前面（<code>app.ts:53-54</code>），這 3 條請求不經過 <code>requireAuth</code> 和防重複寫入（<code>app.ts:57</code>）。登出和改密碼的 token，由 Better Auth 自己驗。</li>
+    <li>測試確認 <code>update-user</code>、<code>sign-up/email</code>、<code>sign-in/email</code> 回 404（<code>test/m0-http.test.ts</code> 的「登入檢查」段）。</li>
+    <li><code>/sign-up/email</code> 同時被 <code>disabledPaths</code>（<code>auth.ts:46</code>）和白名單擋，白名單先擋。</li>
+    <li>登出後，原來的 token 打需要登入的路徑回 401（<code>test/m0-db.test.ts</code>）。</li>
+    <li>同一個前綴下，M2 的註冊路由掛在 <code>authRoutes</code> 前面（<code>app.ts:53</code>），屬於 Account。</li>
+  </ul></div>
+  <div class="b w"><h3>為什麼這樣做</h3><ul>
+    <li><b>用白名單，不用 <code>disabledPaths</code> 一條條關：</b>Better Auth 新版多出來的路徑會自動開放，白名單比較安全（ADR-0107）。</li>
+    <li><b>不整個處理器直接掛上去：</b><code>update-user</code> 能改名稱，錯誤格式也不一致（ADR-0107）。</li>
+    <li><b>不過登入檢查：</b>登入時還沒有 token（ADR-0107）。</li>
+    <li><b>不帶 <code>Idempotency-Key</code>：</b>防重複寫入的紀錄是「某個人加某把 key」，要支援就得多一張沒有擁有者的表。登出第二次沒有 session 可刪，改密碼第二次因為舊密碼已不對而被拒，結果和 PRD-001 §10 要的一樣（ADR-0957）。</li>
+  </ul></div>
+</div>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 250" role="img" aria-label="請求進到 /api/auth 後，先比對白名單，再交給 Better Auth，成功就原樣回，失敗就轉換">
+  <rect class="box bx-blue" x="30" y="10" width="400" height="44" rx="6"/>
+  <text data-ref="auth.ts:73-77" x="230" y="37" class="mid">方法＋路徑在 OPEN 清單裡？</text>
+  <path class="arw-r" marker-end="url(#ar)" d="M430 32H500"/>
+  <text class="lab mid" x="465" y="26">否</text>
+  <rect class="box bx-rust" x="500" y="12" width="270" height="40" rx="6"/>
+  <text x="635" y="37" class="mid r">404 NOT_FOUND</text>
+  <path class="arw" marker-end="url(#a)" d="M230 54V72"/>
+  <text class="lab" x="238" y="68">是</text>
+
+  <rect class="box bx-blue" x="30" y="72" width="400" height="44" rx="6"/>
+  <text data-ref="auth.ts:79" x="230" y="99" class="mid">交給 Better Auth 的 auth.handler</text>
+  <path class="arw" marker-end="url(#a)" d="M230 116V134"/>
+
+  <rect class="box bx-blue" x="30" y="134" width="400" height="44" rx="6"/>
+  <text data-ref="auth.ts:80" x="230" y="161" class="mid">回應成功（res.ok）？</text>
+  <path class="arw-t" marker-end="url(#at)" d="M430 156H500"/>
+  <text class="lab mid" x="465" y="150">是</text>
+  <rect class="box bx-teal" x="500" y="136" width="270" height="40" rx="6"/>
+  <text x="635" y="161" class="mid tl">原樣回給 PWA</text>
+  <path class="arw" marker-end="url(#a)" d="M230 178V196"/>
+  <text class="lab" x="238" y="192">否</text>
+
+  <rect class="box bx-blue" x="30" y="196" width="400" height="44" rx="6"/>
+  <text data-ref="auth.ts:81" x="230" y="223" class="mid">authError 轉成 AppError，throw 出去</text>
+  <path class="arw" marker-end="url(#a)" d="M430 218H500"/>
+  <rect class="box bx-gray" x="500" y="198" width="270" height="40" rx="6"/>
+  <text x="635" y="223" class="mid">app.onError 回統一格式</text>
+</svg>
+</div>
+<figcaption>白名單是 <code>POST /sign-in/username</code>、<code>POST /sign-out</code>、<code>POST /change-password</code>（<code>auth.ts:73</code>）。藍色是這個檔案做的判斷，紅色是被擋掉的結果。最後一格由請求管線處理。</figcaption>
+</figure>
+
+<h3>三條開放的路徑</h3>
+<div class="tbl"><table>
+  <tr><th>路徑</th><th>做什麼</th><th>測試怎麼呼叫</th></tr>
+  <tr><td><code>POST /api/auth/sign-in/username</code></td><td>登入，回 token</td><td>不帶 token（<code>test/m0-db.test.ts</code>）</td></tr>
+  <tr><td><code>POST /api/auth/sign-out</code></td><td>登出</td><td>帶 <code>Authorization: Bearer</code></td></tr>
+  <tr><td><code>POST /api/auth/change-password</code></td><td>改密碼，body 有 <code>currentPassword</code> 和 <code>newPassword</code></td><td>帶 <code>Authorization: Bearer</code></td></tr>
+</table></div>
+
+<h2 id="errors" data-focus="auth.ts:84-104">3 錯誤轉換</h2>
+<div class="parts">
+  <div class="b p"><h3>要解決的問題</h3><p>Better Auth 回的錯誤不是我們的格式（TS-001 §5.6），PWA 無法統一處理。登入失敗時，也不能讓人從訊息分辨是使用者名稱不存在還是密碼錯（TS-003 §5.3）。</p></div>
+  <div class="b m"><h3>怎麼做</h3><p><code>authRoutes</code> 拿到 Better Auth 的回應後，成功就原樣回（<code>auth.ts:80</code>），失敗就交給 <code>authError</code>（<code>auth.ts:85-104</code>）。它讀回應 body 裡的 <code>code</code>，再依下圖的順序判斷，第一個符合的就用。結果是 <code>AppError</code>，丟出去之後由請求管線轉成統一的錯誤格式。</p><h4>這樣做的結果</h4><ul>
+    <li>登入路徑上，狀態碼小於 500 的失敗（429 除外）都變成同一句 401「使用者名稱或密碼不對」，包括 400（<code>auth.ts:95</code>）。名稱不存在和密碼錯的回應完全一樣（<code>test/m0-db.test.ts</code>）。</li>
+    <li>429 先判斷，所以被擋的那次就算密碼正確，也是 <code>RATE_LIMITED</code>（<code>test/m2-account.test.ts</code> 的擋猜密碼段）。</li>
+    <li><code>INVALID_PASSWORD</code> 的判斷不看路徑（<code>auth.ts:96</code>）。</li>
+    <li>Better Auth 的回應 body 讀不出 JSON 時，當成沒有 <code>code</code>（<code>auth.ts:86</code>）。</li>
+    <li>狀態碼 500 以上變成 <code>INTERNAL</code>，<code>console.error</code> 只印狀態碼和 <code>body.code</code>（<code>auth.ts:102-103</code>）。</li>
+  </ul></div>
+  <div class="b w"><h3>為什麼這樣做</h3><ul>
+    <li><b>登入失敗用同一句：</b>TS-003 §5.3、ADR-0107（<code>auth.ts:94</code>）。</li>
+    <li><b>改密碼時目前密碼不對，放在 <code>fields.currentPassword</code>：</b>讓畫面在那一格下面顯示訊息（<code>docs/api/README.md</code> 的 <code>fields</code> 說明、<code>auth.ts:96-97</code>）。</li>
+    <li><b>429 變成 <code>RATE_LIMITED</code> 加 <code>retryAfterSec</code>：</b>ADR-0107、ADR-0303。</li>
+    <li><b>其他 401、403、4xx 照狀態碼對應：</b>ADR-0107。</li>
+    <li><b>log 只記代碼，不記 body：</b>程式註解只寫做法，文件沒寫理由（<code>auth.ts:102</code>）。</li>
+  </ul></div>
+</div>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 490" role="img" aria-label="authError 的判斷順序，每一條判斷對應一個 AppError 代碼">
+  <rect class="box bx-blue" x="20" y="16" width="370" height="50" rx="6"/>
+  <text data-ref="auth.ts:88-92" x="205" y="46" class="mid">狀態碼是 429？</text>
+  <path class="arw" marker-end="url(#a)" d="M390 41H450"/>
+  <text class="lab mid" x="420" y="34">是</text>
+  <rect class="box bx-rust" x="450" y="16" width="330" height="50" rx="6"/>
+  <text class="t mid r" x="615" y="38">RATE_LIMITED + retryAfterSec</text>
+  <text class="s mid" x="615" y="57">X-Retry-After 標頭的秒數，沒有就 60</text>
+  <path class="arw" marker-end="url(#a)" d="M205 66V84"/>
+  <text class="lab" x="213" y="80">否</text>
+
+  <rect class="box bx-blue" x="20" y="84" width="370" height="50" rx="6"/>
+  <text data-ref="auth.ts:95" x="205" y="114" class="mid">路徑是 /sign-in/username，且狀態碼小於 500？</text>
+  <path class="arw" marker-end="url(#a)" d="M390 109H450"/>
+  <text class="lab mid" x="420" y="102">是</text>
+  <rect class="box bx-rust" x="450" y="84" width="330" height="50" rx="6"/>
+  <text class="t mid r" x="615" y="106">UNAUTHORIZED</text>
+  <text class="s mid" x="615" y="125">「使用者名稱或密碼不對」</text>
+  <path class="arw" marker-end="url(#a)" d="M205 134V152"/>
+  <text class="lab" x="213" y="148">否</text>
+
+  <rect class="box bx-blue" x="20" y="152" width="370" height="50" rx="6"/>
+  <text data-ref="auth.ts:96-97" x="205" y="182" class="mid">body.code 是 INVALID_PASSWORD？</text>
+  <path class="arw" marker-end="url(#a)" d="M390 177H450"/>
+  <text class="lab mid" x="420" y="170">是</text>
+  <rect class="box bx-rust" x="450" y="152" width="330" height="50" rx="6"/>
+  <text class="t mid r" x="615" y="174">INVALID_INPUT</text>
+  <text class="s mid" x="615" y="193">「目前的密碼不對」，fields.currentPassword</text>
+  <path class="arw" marker-end="url(#a)" d="M205 202V220"/>
+  <text class="lab" x="213" y="216">否</text>
+
+  <rect class="box bx-blue" x="20" y="220" width="370" height="50" rx="6"/>
+  <text data-ref="auth.ts:98" x="205" y="250" class="mid">狀態碼是 401？</text>
+  <path class="arw" marker-end="url(#a)" d="M390 245H450"/>
+  <text class="lab mid" x="420" y="238">是</text>
+  <rect class="box bx-rust" x="450" y="220" width="330" height="50" rx="6"/>
+  <text x="615" y="250" class="mid r">UNAUTHORIZED</text>
+  <path class="arw" marker-end="url(#a)" d="M205 270V288"/>
+  <text class="lab" x="213" y="284">否</text>
+
+  <rect class="box bx-blue" x="20" y="288" width="370" height="50" rx="6"/>
+  <text data-ref="auth.ts:99" x="205" y="318" class="mid">狀態碼是 403？</text>
+  <path class="arw" marker-end="url(#a)" d="M390 313H450"/>
+  <text class="lab mid" x="420" y="306">是</text>
+  <rect class="box bx-rust" x="450" y="288" width="330" height="50" rx="6"/>
+  <text x="615" y="318" class="mid r">FORBIDDEN</text>
+  <path class="arw" marker-end="url(#a)" d="M205 338V356"/>
+  <text class="lab" x="213" y="352">否</text>
+
+  <rect class="box bx-blue" x="20" y="356" width="370" height="50" rx="6"/>
+  <text data-ref="auth.ts:100" x="205" y="386" class="mid">狀態碼小於 500（其他 4xx）？</text>
+  <path class="arw" marker-end="url(#a)" d="M390 381H450"/>
+  <text class="lab mid" x="420" y="374">是</text>
+  <rect class="box bx-rust" x="450" y="356" width="330" height="50" rx="6"/>
+  <text x="615" y="386" class="mid r">INVALID_INPUT</text>
+  <path class="arw" marker-end="url(#a)" d="M205 406V424"/>
+  <text class="lab" x="213" y="420">否</text>
+
+  <rect class="box bx-gray" x="20" y="424" width="370" height="50" rx="6"/>
+  <text data-ref="auth.ts:102-103" x="205" y="454" class="mid">500 以上</text>
+  <path class="arw" marker-end="url(#a)" d="M390 449H450"/>
+  <rect class="box bx-rust" x="450" y="424" width="330" height="50" rx="6"/>
+  <text class="t mid r" x="615" y="446">INTERNAL</text>
+  <text class="s mid" x="615" y="465">console.error 只印狀態碼和 code</text>
+</svg>
+</div>
+<figcaption>判斷順序在 <code>auth.ts:85-104</code>，點方框可以看對應的行。左邊是判斷，右邊是丟出的 <code>AppError</code> 代碼。</figcaption>
+</figure>
+
+<h2 id="rate" data-focus="auth.ts:59-67">4 擋猜密碼</h2>
+<div class="parts">
+  <div class="b p"><h3>要解決的問題</h3><p>登入只靠使用者名稱加密碼。同一個來源如果能短時間內一直試，就能猜密碼。同一個來源試太多次，要暫時擋下來（TS-003 §5.3）。</p></div>
+  <div class="b m"><h3>怎麼做</h3><p>用 Better Auth 內建的 <code>rateLimit</code>，明寫 <code>enabled: true</code>，登入路徑 <code>/sign-in/username</code> 設成 60 秒內最多 10 次（<code>auth.ts:67</code>）。來源用 <code>cf-connecting-ip</code> 標頭認（<code>auth.ts:59-60</code>）。超過時 Better Auth 回 429，第 3 段把它轉成 <code>RATE_LIMITED</code>。其他路徑用 Better Auth 的預設值，例如改密碼每 10 秒 3 次（<code>auth.ts:65</code>）。</p><h4>這樣做的結果</h4><ul>
+    <li>同一個 IP 在一分鐘內第 11 次登入回 429，別的 IP 不受影響（<code>test/m2-account.test.ts</code> 的擋猜密碼段）。</li>
+    <li>計數存在伺服器記憶體，重開就歸零（<code>auth.ts:66</code>）。</li>
+    <li>讀不到 IP 時，所有人共用一個計數（<code>auth.ts:64</code>）。</li>
+    <li>一個家庭或據點共用一個 IP 時，一分鐘內合計 10 次（ADR-0303）。</li>
+    <li>註冊的次數限制不在這裡，屬於 Account（ADR-0950）。</li>
+  </ul></div>
+  <div class="b w"><h3>為什麼這樣做</h3><ul>
+    <li><b>明寫 <code>enabled</code>：</b>Better Auth 預設只在 production 開，開發和測試也要擋，測試才驗得到（<code>auth.ts:64</code>、ADR-0303）。</li>
+    <li><b>依 IP 擋，不依帳號擋：</b>依帳號的話，別人可以故意打錯把你鎖住（ADR-0303）。</li>
+    <li><b>計數放記憶體：</b><code>storage: 'database'</code> 要多一張表，20 人、一台伺服器用不到（ADR-0303、<code>auth.ts:66</code>）。</li>
+    <li><b>每分鐘 10 次這個數字：</b>文件沒寫理由，TS-003 §7 只把它列為 v0 想法。</li>
+  </ul></div>
+</div>
+
+<h2 id="tables" data-focus="001_m0.sql:4-59">5 帳號資料表</h2>
+<div class="parts">
+  <div class="b p"><h3>要解決的問題</h3><p>Better Auth 要存帳號、密碼和登入狀態。使用者要求刪除帳號時，這個人的資料要一起刪（PRD-001 §9.2）。</p></div>
+  <div class="b m"><h3>怎麼做</h3><p><code>001_m0.sql:10-59</code> 建 <code>users</code>、<code>sessions</code>、<code>accounts</code>、<code>verifications</code> 四張表。內容是用 Better Auth 1.7 的 <code>getMigrations</code> 照 <code>auth.ts</code> 的設定產生一次，貼進我們的 migration（<code>001_m0.sql:5-6</code>）。<code>sessions</code> 和 <code>accounts</code> 的 <code>userId</code> 都是外鍵，設了 <code>on delete cascade</code>，意思是 <code>users</code> 那一列被刪，這兩張表的對應列跟著刪（<code>001_m0.sql:29</code>、<code>001_m0.sql:36</code>）。</p><h4>這樣做的結果</h4><ul>
+    <li>密碼的雜湊值（把密碼轉成無法還原的字串）放在 <code>accounts.password</code>，團隊重設指令找的是 <code>providerId = 'credential'</code> 的那一列（<code>reset-password.ts:39-41</code>）。</li>
+    <li>每支手機的登入狀態是 <code>sessions</code> 的一列，<code>token</code> 欄不能重複（<code>001_m0.sql:24</code>）。團隊重設指令用刪掉這個人的 <code>sessions</code> 列來登出所有手機（<code>reset-password.ts:44</code>）。</li>
+    <li>這四張表不開 RLS（資料庫依登入者限制能看到哪些列的機制），Better Auth 用自己的連線池讀寫，不經過 <code>forUser</code>（<code>001_m0.sql:7</code>）。</li>
+    <li>刪 <code>users</code> 一列，私人資料表也跟著刪，因為每張都有 <code>references users (id) on delete cascade</code>（<code>001_m0.sql:8</code>）。</li>
+  </ul></div>
+  <div class="b w"><h3>為什麼這樣做</h3><ul>
+    <li><b>表由我們的 migration 建，不用 Better Auth 自己的 <code>migrate</code>：</b><code>app</code> 帳號不能建表（<code>001_m0.sql:7</code>、ADR-0106）。</li>
+    <li><b>欄位維持 camelCase：</b>改成 snake_case 的話，每個欄位都要在設定裡對應一次，容易漏；我們自己的表只參照 <code>users.id</code>（ADR-0106）。</li>
+    <li><b>id 用 uuid：</b>文件沒寫理由，TS-003 §7 與 ADR-0106 只寫了這個決定。</li>
+    <li><b>不開 RLS：</b>這四張表由 Better Auth 管（<code>001_m0.sql:7</code>）。</li>
+  </ul></div>
+</div>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 270" role="img" aria-label="users 是帳號的主表，sessions 和 accounts 以 userId 指向它，私人資料表也指向它，verifications 沒有 userId">
+  <rect class="box bx-blue" x="40" y="60" width="190" height="96" rx="6"/>
+  <text class="t mid" x="135" y="88">users</text>
+  <text class="s mid" x="135" y="110">id 是 uuid</text>
+  <text class="s mid" x="135" y="130">username 不能重複</text>
+
+  <rect class="box bx-teal" x="340" y="20" width="230" height="56" rx="6"/>
+  <text class="t mid" x="455" y="44">sessions</text>
+  <text class="s mid" x="455" y="63">token 不能重複，expiresAt</text>
+
+  <rect class="box bx-teal" x="340" y="100" width="230" height="56" rx="6"/>
+  <text class="t mid" x="455" y="124">accounts</text>
+  <text class="s mid" x="455" y="143">providerId、password</text>
+
+  <rect class="box bx-none" x="340" y="180" width="230" height="56" rx="6"/>
+  <text class="t mid" x="455" y="204">verifications</text>
+  <text class="s mid" x="455" y="223">沒有 userId 欄位</text>
+
+  <rect class="box bx-gray" x="40" y="196" width="190" height="56" rx="6"/>
+  <text class="t mid" x="135" y="220">其他私人資料表</text>
+  <text class="s mid" x="135" y="239">profiles、events 等</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 90H285V48H340"/>
+  <text class="lab mid" x="314" y="42">userId</text>
+  <path class="arw" marker-end="url(#a)" d="M230 128H340"/>
+  <text class="lab mid" x="285" y="121">userId</text>
+  <path class="arw" marker-end="url(#a)" d="M135 156V196"/>
+  <text class="lab" x="145" y="181">user_id</text>
+</svg>
+</div>
+<figcaption>箭頭從 <code>users</code> 指向參照它的表，三條都是 <code>on delete cascade</code>。<code>users</code>、<code>sessions</code>、<code>accounts</code>、<code>verifications</code> 的定義在 <code>001_m0.sql:10-59</code>，<code>profiles</code> 在 <code>003_m2.sql:6</code>。</figcaption>
+</figure>
+
+<h2 id="reset" data-focus="reset-password.ts:14-104">6 團隊重設密碼</h2>
+<div class="parts">
+  <div class="b p"><h3>要解決的問題</h3><p>帳號沒有真的 email，App 內也沒有自助重設密碼（TS-003 §1）。忘記密碼的人要寫信給團隊，團隊確認是本人後給一組臨時密碼。來要密碼的原因也可能是手機被別人拿走，所以重設時要把這個人所有手機都登出（TS-003 §5.4）。</p></div>
+  <div class="b m"><h3>怎麼做</h3><p>團隊在自己的電腦上跑 <code>bun run admin:reset-password &lt;使用者名稱&gt;</code>（<code>reset-password.ts:1-6</code>），經 SSH 通道連到資料庫，連線網址放在 <code>MIGRATION_DATABASE_URL</code>。指令先印出連的資料庫（<code>reset-password.ts:97-98</code>），再印使用者名稱、顯示名稱、小學名稱，問一次要不要重設。只有輸入 <code>y</code> 才重設（<code>reset-password.ts:77</code>）。重設時產生 12 字的隨機臨時密碼，換掉密碼、刪光這個人的 session、記一筆事件，三件事放在同一個交易裡。交易是一組資料庫操作，任何一步失敗就整組取消。</p><h4>這樣做的結果</h4><ul>
+    <li>使用者名稱去掉前後空白、轉小寫再查，所以大小寫不影響（<code>reset-password.ts:26</code>，測試用大寫名稱）。</li>
+    <li>輸入去掉前後空白後必須剛好是小寫 <code>y</code>，大寫 <code>Y</code>、其他字或空輸入都不重設（<code>reset-password.ts:77</code>）。</li>
+    <li>帳號沒有小學名稱時，不問、不重設，指令以 1 結束（<code>reset-password.ts:68-72</code>、<code>reset-password.ts:103</code>）。</li>
+    <li><code>accounts</code> 裡 <code>credential</code> 那一列不是剛好 1 列時，丟出一般的 <code>Error</code>，整個交易取消，session 不會被刪。<code>run</code> 沒有接住這個 Error（<code>reset-password.ts:42</code>、<code>reset-password.ts:52-86</code>）。</li>
+    <li>事件只記 <code>password_reset_by_team</code>，props 是空的，不含臨時密碼和小學名稱（<code>test/m2-reset-password.test.ts</code>）。</li>
+    <li>臨時密碼只印在團隊的終端機畫面，小學名稱也會留在那個畫面上（ADR-0309）。</li>
+    <li>測試確認重設後，舊密碼不能登入，新密碼可以，這個人另一支手機的 token 也失效（<code>test/m2-reset-password.test.ts</code>）。</li>
+  </ul></div>
+  <div class="b w"><h3>為什麼這樣做</h3><ul>
+    <li><b>做成指令，不做成 API：</b>TS-003 §5.4 已決定不做，文件沒寫理由（ADR-0309）。</li>
+    <li><b>用 <code>migrator</code> 連線：</b>小學名稱在 <code>account_recovery</code>，後端的 <code>app</code> 帳號被收回讀取權限，只有表的擁有者 <code>migrator</code> 讀得到（<code>reset-password.ts:4</code>、<code>003_m2.sql:31-32</code>、ADR-0300）。團隊也不該拿後端的帳號做人工處理（ADR-0309）。</li>
+    <li><b>沒有小學名稱就拒絕：</b>使用者名稱和顯示名稱不是祕密，真正用來確認本人的是小學名稱，沒有它團隊可能只對了兩項就按 y（ADR-0958、TS-003 §4.3）。</li>
+    <li><b>用 Better Auth 的 <code>hashPassword</code>：</b><code>auth.ts</code> 沒有自訂雜湊函式，這樣登入時才對得上（<code>reset-password.ts:36</code>）。</li>
+    <li><b>刪光 session：</b>來要密碼的原因也可能是手機被別人拿走（TS-003 §5.4、<code>reset-password.ts:30</code>）。</li>
+    <li><b>不從 <code>m0-foundation</code> 的 index 匯入：</b>那會順便啟動 Better Auth、連 <code>.env</code> 的 <code>DATABASE_URL</code> 檢查表，團隊電腦上用不到（<code>reset-password.ts:11-12</code>）。</li>
+    <li><b>臨時密碼去掉容易看錯的字：</b>0 和 O、1 和 l 和 I 這種，唸給對方聽、對方抄的時候容易看錯（<code>reset-password.ts:14-15</code>）。</li>
+    <li><b>流程抽成 <code>run(db, username, ask, print)</code>：</b>輸入和輸出由外面給，測試才能假裝團隊的輸入（<code>reset-password.ts:51-57</code>、ADR-0309）。</li>
+    <li><b>先印連的是哪個資料庫：</b>免得在開發用的資料庫改了半天（<code>reset-password.ts:96-98</code>）。</li>
+  </ul></div>
+</div>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 320" role="img" aria-label="重設密碼指令的流程：找帳號、檢查小學名稱、詢問 y、交易、印臨時密碼">
+  <rect class="box bx-blue" x="30" y="10" width="400" height="44" rx="6"/>
+  <text data-ref="reset-password.ts:58-62" x="230" y="37" class="mid">找得到這個使用者名稱？</text>
+  <path class="arw-r" marker-end="url(#ar)" d="M430 32H500"/>
+  <text class="lab mid" x="465" y="26">否</text>
+  <rect class="box bx-rust" x="500" y="12" width="270" height="40" rx="6"/>
+  <text x="635" y="37" class="mid r">印「找不到」，結束</text>
+  <path class="arw" marker-end="url(#a)" d="M230 54V72"/>
+  <text class="lab" x="238" y="68">是</text>
+
+  <rect class="box bx-blue" x="30" y="72" width="400" height="44" rx="6"/>
+  <text data-ref="reset-password.ts:68-72" x="230" y="99" class="mid">帳號有小學名稱？</text>
+  <path class="arw-r" marker-end="url(#ar)" d="M430 94H500"/>
+  <text class="lab mid" x="465" y="88">否</text>
+  <rect class="box bx-rust" x="500" y="74" width="270" height="40" rx="6"/>
+  <text x="635" y="99" class="mid r">不問，建議重新註冊，結束</text>
+  <path class="arw" marker-end="url(#a)" d="M230 116V134"/>
+  <text class="lab" x="238" y="130">是</text>
+
+  <rect class="box bx-blue" x="30" y="134" width="400" height="44" rx="6"/>
+  <text data-ref="reset-password.ts:77-80" x="230" y="161" class="mid">印出三項後詢問，輸入的是 y？</text>
+  <path class="arw-r" marker-end="url(#ar)" d="M430 156H500"/>
+  <text class="lab mid" x="465" y="150">否</text>
+  <rect class="box bx-rust" x="500" y="136" width="270" height="40" rx="6"/>
+  <text x="635" y="161" class="mid r">印「沒有重設」，結束</text>
+  <path class="arw" marker-end="url(#a)" d="M230 178V196"/>
+  <text class="lab" x="238" y="192">是</text>
+
+  <rect class="box bx-gold" x="30" y="196" width="400" height="44" rx="6"/>
+  <text data-ref="reset-password.ts:38-46" x="230" y="223" class="mid">一個交易：換密碼、刪 sessions、記事件</text>
+  <path class="arw-r" marker-end="url(#ar)" d="M430 218H500"/>
+  <rect class="box bx-rust" x="500" y="194" width="270" height="48" rx="6"/>
+  <text class="t mid r" x="635" y="214">accounts 不是剛好 1 列</text>
+  <text class="s mid" x="635" y="233">交易取消，丟出 Error</text>
+  <path class="arw" marker-end="url(#a)" d="M230 240V258"/>
+  <text class="lab" x="238" y="254">成功</text>
+
+  <rect class="box bx-teal" x="30" y="258" width="400" height="44" rx="6"/>
+  <text data-ref="reset-password.ts:82-85" x="230" y="285" class="mid">印出臨時密碼，結束</text>
+</svg>
+</div>
+<figcaption>流程在 <code>reset-password.ts:52-86</code>，點方框可以看對應的行。紅色是結束或中斷。結束時 <code>run</code> 回 <code>true</code> 或 <code>false</code>，指令的結束碼分別是 0 和 1（<code>reset-password.ts:103</code>）。</figcaption>
+</figure>
+
+<h2 id="spec">和規格不一樣的地方</h2>
+<p>下面兩項，實作和規格的字面不同或規格沒寫到，每一項都有對應的依據。</p>
+<div class="tbl"><table>
+  <tr><th>規格寫的</th><th>實際做的</th><th>依據</th></tr>
+  <tr><td>TS-001 §5.7、PRD-001 §10：每個寫入都帶防重複的 key</td><td><code>POST /sign-out</code>、<code>POST /change-password</code> 不帶，靠第二次會被拒</td><td>ADR-0957</td></tr>
+  <tr><td>TS-003 §4.3：三項都對得上才重設，沒有寫帳號沒有小學名稱時怎麼辦</td><td>沒有小學名稱的帳號，指令不問就拒絕，建議重新註冊</td><td>ADR-0958</td></tr>
+</table></div>
+
+<h2 id="adr">決定清單</h2>
+<p>這一段有 8 個 ADR，<b>7 個是 Claude 決定的</b>，1 個是你決定的。</p>
+<div class="tbl"><table>
+  <tr><th>ADR</th><th>決定了什麼</th><th>放棄的做法</th><th>決定者</th></tr>
+  <tr><td>0002（含 0003、0009）</td><td>登入憑證用 Bearer token；Better Auth 用 <code>pg</code> 連線池連同一個資料庫</td><td>Cookie（前後端要放在同一個主網域下）</td><td>你</td></tr>
+  <tr><td>0106</td><td>Better Auth 的設定：複數表名、uuid、<code>username</code> 加 <code>bearer</code>、關掉公開註冊、session 365 天</td><td>欄位改 snake_case、用 Better Auth 自己的 <code>migrate</code></td><td>Claude</td></tr>
+  <tr><td>0107</td><td><code>/api/auth</code> 只開放三條路徑，錯誤轉成我們的格式</td><td>整個處理器直接掛上去、用 <code>disabledPaths</code> 一條條關</td><td>Claude</td></tr>
+  <tr><td>0303</td><td>登入同一個 IP 每分鐘 10 次，計數存在記憶體</td><td><code>storage: 'database'</code>、依帳號擋</td><td>Claude</td></tr>
+  <tr><td>0957</td><td>登出、改密碼（和註冊）不帶 <code>Idempotency-Key</code></td><td>也收 key，多一張沒有擁有者的表</td><td>Claude</td></tr>
+  <tr><td>0300</td><td><code>account_recovery</code> 對 <code>app</code> 帳號收回讀取權限，重設指令用 <code>migrator</code> 讀</td><td>只靠把小學名稱分開放</td><td>Claude</td></tr>
+  <tr><td>0309</td><td>重設密碼做成團隊電腦上的指令，臨時密碼 12 字，同一個交易</td><td>做成只有團隊能呼叫的 API、用 <code>app</code> 帳號連</td><td>Claude</td></tr>
+  <tr><td>0958</td><td>沒有小學名稱的帳號，重設指令直接拒絕</td><td>照舊印出、只加警告</td><td>Claude</td></tr>
+</table></div>
+
+<h2 id="limits">已知上限</h2>
+<p>這些是刻意的簡化。程式裡標了 <code>ponytail</code>，或寫在 ADR 裡。</p>
+<div class="tbl"><table>
+  <tr><th>簡化</th><th>什麼時候會出問題</th><th>到時候怎麼改</th></tr>
+  <tr><td>擋猜密碼的計數存在記憶體（<code>auth.ts:66</code>）</td><td>伺服器重開計數就歸零；有多台伺服器時各算各的</td><td>改成 <code>storage: 'database'</code>，要多一張表</td></tr>
+  <tr><td>靠不開放 <code>update-user</code> 擋改使用者名稱（<code>auth.ts:38-40</code>）</td><td>M2 若在伺服器端呼叫 <code>auth.api.updateUser</code> 改名稱，就擋不住</td><td>設定照開著 <code>immutableUsername</code>，留給以後修好的 Better Auth 版本（ADR-0107）</td></tr>
+  <tr><td>沒有小學名稱的帳號不能用指令重設（ADR-0958）</td><td>半個帳號又忘記密碼時，只能重新註冊；這種帳號只有伺服器在註冊途中當掉才會出現</td><td>還記得密碼時，可以到「我的設定」補上小學名稱，之後指令照常</td></tr>
+</table></div>
