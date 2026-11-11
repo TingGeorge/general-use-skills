@@ -44,7 +44,7 @@ Read `references/writing.md` first; it has the fragment layout, the content rule
 
 1. Read the code of the page completely, the tests that exercise it, and the documents found in step 1.
 2. Choose the topics from how the code is organised around purposes.
-3. Write the fragment to a scratch file (not into the repo).
+3. Write the fragment to a scratch file (not into the repo). A page about code starts with a function map, and a page about a database schema with an ER diagram; both are drawn by scripts in this skill (see `references/writing.md`).
 4. Build it:
 
        python3 -I <skill>/scripts/build_page.py <fragment> --out <repo>/<folder>/<Page>.html --repo <repo> [--rev REV] [--base BASE] --lang <zh-TW|en>
@@ -78,6 +78,7 @@ The user reads and asks, in chat or in comments on the page. Your part:
 ## Files in this skill
 
 - `scripts/build_page.py`: checks a fragment and builds the page. `--selfcheck` runs its own test.
+- `scripts/fn_map.py`: a small library for the function map each code page starts with (files, functions, calls); it refuses crossing lines and arrows not backed by a line of code (see "Function map" in `references/writing.md`). `--selfcheck` runs its own test.
 - `scripts/er_diagram.py`: draws the ER diagram for a page about a database schema from a JSON spec (see "ER diagram" in `references/writing.md`). `--selfcheck` runs its own test.
 - `assets/shell.html`: styles, the code pane (dark, wrap toggle, adjustable width, diff marks), the open-in-window button for `figure.zoom`, and its script. Highlighting follows the file extension. Change the look here, then rebuild pages.
 - `references/writing.md`: how to write a fragment. Read before writing; give its path to page-writing subagents.

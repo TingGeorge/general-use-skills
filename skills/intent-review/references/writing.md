@@ -95,6 +95,26 @@ Add `class="zoom"` to a `<figure>` and the page puts a button on it that opens t
 
 A zoom figure may hold two drawings of the same thing: `<div class="scroll brief">` is shown in the page and `<div class="scroll detail">` only in the window. Use the pair when the full picture cannot fit the page width without becoming cramped: the brief one keeps what the reader needs to follow the text, the detailed one has everything. `data-open` and `data-close` on the figure set the button's two labels, so the label can say what opening adds ("Show all columns") and not just "Enlarge". Opening a figure that only gets bigger gives the reader nothing new, so when you have a detail drawing, make sure it really shows more.
 
+### Function map
+
+A page about code gets one function map near the top, before the first topic: grey containers are files, the boxes in them are functions, arrows are calls. It answers what the topics do not: which function calls which, and in which file. A reviewer looks at it first to know where things are, and comes back to it while reading.
+
+Draw it with `scripts/fn_map.py`: a small library, not a layout engine. You write a short Python script that places the boxes and routes the lines, and the library refuses a drawing with a line through a box or a name, crossing lines, or a name wider than its box. It also refuses arrows nobody checked: every `call` names the line of code where the call is (`at='file.ts:23'`), and `verify` checks that this line sits inside the caller and contains the callee. So the script cannot finish until every arrow is true. The file's docstring has the API and a small example.
+
+How to lay it out so it reads well:
+
+- **One main path.** Find the path the page is about (a request coming in, a job running, a message being handled) and put its functions in one column, top to bottom, with `path=True`. That column is what the reader follows.
+- **Helpers beside their callers.** Put the functions the path calls to the right, at the same height as the caller, in their own file containers. Most arrows then run straight across. Shared helpers that many things call (errors, logging) go in a row along the bottom.
+- **About 20 functions at most.** Only the ones the page's topics talk about. Leave out what is called from everywhere (an error class, a logger) and say in the caption what is left out; an honest gap is better than a full, unreadable picture.
+- **Three kinds of line**: `call` (black) for a direct call, `kind='next'` (green) when control passes on without a direct call (middleware order, a queue, an event), `kind='error'` (red dashed) for what runs when something throws.
+- **No crossings.** Reroute, reorder the boxes, or use the two tools the library gives: a `group` around functions that share callers or callees (one line to the group stands for all of them), and a fork (a second arrow from the same function may start on its first arrow). If it still cannot be drawn without crossings, the map has too much in it.
+- **Functions outside the page** (called by or calling this page's code) go in a `dashed=True` container with no ref.
+- **Diff pages**: mark the functions the change touches with `changed=True`, so the reader sees where the change sits.
+
+Leave room: columns about 250px apart, rows about 50px apart, 30px between a container's top and its first box (the file name sits there). Run the script, read the problems it lists, fix, and repeat until it prints the figure. Then put the figure in the fragment under its own heading, with one paragraph before it saying how to read it, and a caption that explains anything the picture cannot (a group, a fork, what is left out). Translate the legend with `legend(x, y, text={...})`.
+
+A page with fewer than about four functions that call each other (a schema, a list of types) does not need a map: say so in your report and leave it out.
+
 ### ER diagram for database pages
 
 A page about a database schema gets one ER diagram of all its tables, near the top. Readers find one picture easier than a figure per group, and what makes a single picture unreadable is listing every column, not the number of tables.
