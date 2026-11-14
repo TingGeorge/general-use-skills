@@ -83,7 +83,8 @@ h2 + details.more { margin-top: 14px; }
 
 figure { margin: 18px 0 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
 figure .scroll { overflow-x: auto; }
-figure svg { display: block; width: 100%; min-width: 560px; height: auto; }
+/* A drawing keeps its own size whatever the width of the page: the script sets its width from its viewBox, and a narrow page scrolls it sideways */
+figure svg { display: block; height: auto; margin: 0 auto; }
 
 /* <figure class="zoom"> can be opened over the whole window. It may hold two drawings: .brief for the page, .detail for the window */
 figure.zoom { position: relative; padding-top: 44px; }
@@ -94,7 +95,6 @@ figure.zoom.full .detail { display: block; }
 .zoom-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 figure.zoom.full { position: fixed; z-index: 40; inset: 0; margin: 0; border: 0; border-radius: 0; overflow: auto; padding: 44px max(20px, env(safe-area-inset-right, 0px)) 40px max(20px, env(safe-area-inset-left, 0px)); }
 figure.zoom.full .zoom-btn { position: fixed; top: 14px; right: 22px; }
-figure.zoom.full svg { width: min(100%, 1280px); margin: 0 auto; }
 figure.zoom.full figcaption { max-width: 1280px; margin-inline: auto; }
 body:has(figure.zoom.full) { overflow: hidden; }
 figcaption { font-size: 0.87rem; color: var(--muted); margin-top: 8px; line-height: 1.6; }
@@ -368,6 +368,8 @@ for (const el of document.querySelectorAll('.wrap svg text')) {
 let active = null;
 
 // Diagrams marked class="zoom" can fill the window. Opening a code ref from there goes back to the page, where the code pane is
+for (const drawing of document.querySelectorAll('figure svg[viewBox]')) drawing.style.width = `${drawing.viewBox.baseVal.width}px`;
+
 function setFull(fig) {
   for (const f of document.querySelectorAll('figure.zoom')) {
     const on = f === fig;

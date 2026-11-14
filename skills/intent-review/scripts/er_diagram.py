@@ -5,8 +5,9 @@ Prints one <figure class="zoom"> to paste into a fragment. It holds two drawings
 a brief one for the page (key columns and a count of the rest) and a detailed one (every column with its type)
 that the page shows when the reader opens the figure over the whole window.
 
-Layout: the hub table is one tall box in the middle, the other tables sit left and right of it, and every link
-to the hub is one straight line at the height of its foreign-key row. Line ends are crow's-foot marks.
+Layout: the hub table is a small box in the middle, the other tables sit left and right of it, and every link
+to the hub leaves its foreign-key row, turns once in the gap and enters the hub side at its own point.
+Links never cross (see lanes()). Line ends are crow's-foot marks.
 
 ponytail: one hub only. A link that does not go to the hub must join two tables that sit one directly above
 the other in the same column (the upper one holds the foreign key). A schema without a clear hub, or with
@@ -37,6 +38,7 @@ Self-check: er_diagram.py --selfcheck
 import html, json, sys
 
 HEAD, ROW, PAD, GAP, EDGE = 30, 20, 8, 30, 16
+PORT, LANE, AISLE = 18, 12, 100  # between two lines into the hub, between two turning lines, between hub and side tables
 TAG = {'PK': 'r', 'FK': 'bk', 'UQ': 'tl'}
 LINE = 'style="stroke-width:1.8"'
 RING = 'style="stroke-width:1.8;fill:var(--panel)"'
@@ -59,6 +61,21 @@ def end(kind, e, y, d=1, vertical=False):
     return f'<path class="arw" {LINE} d="M{pt(12, 0)}L{pt(0, -6)}M{pt(12, 0)}L{pt(0, 6)}"/>' + ring(18)
 
 
+def lanes(moves):
+    """Which lane each link turns in, 0 = nearest the hub. moves: (row y, hub y) per link, top to bottom.
+    Links that go down are nested with the top one nearest the hub, links that go up the other way round,
+    so no line crosses another."""
+    out, i = [], 0
+    while i < len(moves):
+        way = (moves[i][1] > moves[i][0]) - (moves[i][1] < moves[i][0])
+        j = i
+        while j < len(moves) and (moves[j][1] > moves[j][0]) - (moves[j][1] < moves[j][0]) == way:
+            j += 1
+        out += [0] * (j - i) if way == 0 else list(range(j - i)) if way > 0 else list(range(j - i - 1, -1, -1))
+        i = j
+    return out
+
+
 def draw(spec, detail):
     tables, hub, text = spec['tables'], spec['hub'], {**TEXT, **spec.get('text', {})}
     left = spec.get('detail_left', spec['left']) if detail else spec['left']
@@ -74,7 +91,7 @@ def draw(spec, detail):
     need = max(need, max(24 + wide(n) * 1.05 + (wide(tables[n].get('badge', '')) + 16) for n in tables))
     if detail:
         W = int(max(need, 260))
-        width = 3 * W + 2 * EDGE + 2 * 74
+        width = 3 * W + 2 * EDGE + 2 * AISLE
     else:
         W, width = 210, 800
         assert need <= W, f'a name needs {int(need)}px but the brief boxes are {W}px wide: this schema does not fit, draw it by hand'
@@ -122,14 +139,21 @@ def draw(spec, detail):
     row_y = lambda n, c: top[n][1] + HEAD + ROW * [k[0] for k in cols(n)].index(c) + 10
     fk_y = {n: row_y(n, l['column']) for n, l in to_hub.items()}
 
-    uh = max([max(fk_y.values(), default=0) + 30 - EDGE, height(hub)])
-    o += table(hub, mid, EDGE, uh)
-    for n, y in fk_y.items():
-        l = to_hub[n]
-        if top[n][0] == EDGE:
-            o.append(f'<path class="arw" {LINE} d="M{EDGE + W} {y}H{mid}"/>' + end(l['from_end'], EDGE + W, y, -1) + end(l['to_end'], mid, y, 1))
-        else:
-            o.append(f'<path class="arw" {LINE} d="M{mid + W} {y}H{right_x}"/>' + end(l['to_end'], mid + W, y, -1) + end(l['from_end'], right_x, y, 1))
+    side = {x: sorted((n for n in fk_y if top[n][0] == x), key=fk_y.get) for x in (EDGE, right_x)}
+    most = max(len(v) for v in side.values())
+    uh = max(height(hub), PORT * (most - 1) + 36)
+    ys = list(fk_y.values()) or [EDGE + uh // 2]
+    hy = max(EDGE, (min(ys) + max(ys)) // 2 - uh // 2)
+    o += table(hub, mid, hy, uh)
+    for x, names in side.items():
+        ports = [hy + uh // 2 + PORT * i - PORT * (len(names) - 1) // 2 for i in range(len(names))]
+        turn = lanes([(fk_y[n], p) for n, p in zip(names, ports)])
+        assert 20 + LANE * max(turn, default=0) + 24 <= mid - EDGE - W, 'too many links turn on one side for the gap: draw this one by hand'
+        for n, p, k in zip(names, ports, turn):
+            l, y = to_hub[n], fk_y[n]
+            a, b, d = (EDGE + W, mid, -1) if x == EDGE else (right_x, mid + W, 1)   # table edge, hub edge, which way the table lies
+            lane = b + d * (20 + LANE * k)
+            o.append(f'<path class="arw" style="stroke-width:1.8;fill:none" d="M{a} {y}H{lane}V{p}H{b}"/>' + end(l['from_end'], a, y, d) + end(l['to_end'], b, p, -d))
 
     for n, (x, y) in top.items():
         o += table(n, x, y)
@@ -144,7 +168,7 @@ def draw(spec, detail):
             o.append(f'<text class="lab" x="{x + 16}" y="{(a + b) // 2 - 4 + 16 * i}">{html.escape(line)}</text>')
 
     lw = int(max(wide(text[k]) for k in ('one', 'many', 'maybe')) * 0.93 + 92)
-    lx, ly = mid, EDGE + uh + 40
+    lx, ly = mid, hy + uh + 40
     o.append(f'<rect class="box bx-none" x="{lx}" y="{ly}" width="{lw}" height="106" rx="8"/>')
     o.append(f'<text class="t" x="{lx + 14}" y="{ly + 24}">{html.escape(text["legend"])}</text>')
     for i, kind in enumerate(('one', 'many', 'maybe')):
@@ -185,6 +209,7 @@ def selfcheck():
     assert '>note<' not in brief and '>note<' in detail, 'non-key columns belong only to the detailed drawing'
     assert '1 more columns' in brief and 'more columns' not in detail
     assert brief.count('<circle') == detail.count('<circle') == 6, 'four link ends with a ring, plus two in the legend'
+    assert lanes([(10, 50), (30, 68), (86, 86), (200, 104), (300, 122)]) == [0, 1, 0, 1, 0], 'nested turns'
     assert 'data-ref="a.sql:1-5"' in out and 'data-open="Show all columns"' in out
 
     spec['left'] = ['items', 'orders']
