@@ -1,386 +1,723 @@
-<!-- sources: app/server/src/m0-foundation/auth.ts, app/server/src/m2-account/reset-password.ts, app/server/db/migrations/001_m0.sql, app/server/db/migrations/003_m2.sql, app/server/src/app.ts, app/server/src/m0-foundation/middleware.ts -->
-<h1>Auth Design</h1>
-<p class="sub">登入與身分：每一段想解決什麼、怎麼做、為什麼這樣做</p>
+<!-- sources: app/server/src/m5-activities-reports/routes.ts, app/server/src/m5-activities-reports/rules.ts, app/server/src/m5-activities-reports/store.ts, app/server/db/migrations/006_m5.sql, app/server/db/migrations/007_review_fixes.sql -->
+<h1>Activities And Reports Design</h1>
+<p class="sub">活動與回報：每一段想解決什麼、怎麼做、為什麼這樣做</p>
 
 <nav class="toc" aria-label="本頁目錄">
   <a href="#overview">總覽</a>
-  <a href="#setup">1 設定與登入憑證</a>
-  <a href="#paths">2 開放的路徑</a>
-  <a href="#errors">3 錯誤轉換</a>
-  <a href="#rate">4 擋猜密碼</a>
-  <a href="#tables">5 帳號資料表</a>
-  <a href="#reset">6 團隊重設密碼</a>
-  <a href="#spec">和規格的差異</a>
+  <a href="#map">函式地圖</a>
+  <a href="#state">1 狀態與按鈕</a>
+  <a href="#accept">2 接受</a>
+  <a href="#slot">3 佔用時段與防重疊</a>
+  <a href="#actions">4 出發、去不了、回報</a>
+  <a href="#shared">5 共用內容與個人活動</a>
+  <a href="#list">6 活動清單</a>
+  <a href="#spec">和規格不一樣的地方</a>
   <a href="#adr">決定清單</a>
   <a href="#limits">已知上限</a>
 </nav>
 
 <h2 id="overview">總覽</h2>
-<p>登入用 Better Auth，這是一個跑在後端程式裡的登入套件，帳號和登入狀態存在同一個 PostgreSQL。這一頁講 Better Auth 怎麼設定、對外開哪幾條路徑、它的錯誤怎麼變成我們的格式，以及團隊用來重設密碼的指令。每一次請求的登入檢查（<code>requireAuth</code>）屬於請求管線，註冊屬於 Account，這裡只在用到時提一句。這頁拆成 6 段，每段都有三格：<b>要解決的問題</b>、<b>怎麼做</b>、<b>為什麼這樣做</b>。</p>
+<p>使用者在推薦卡上按「接受」之後的事，都由這個模組處理：存成已安排的活動、我出發了、去不了、回報，以及活動清單。</p>
+<details class="more"><summary>各段一覽</summary><div class="in">
 <div class="tbl"><table>
-  <tr><th>段落</th><th>要解決的問題</th><th>做法</th><th>檔案</th></tr>
-  <tr><td>1 設定與登入憑證</td><td>用使用者名稱加密碼登入，不寄信，前後端網域不同</td><td>Better Auth 加 <code>bearer</code>、<code>username</code> 外掛，關掉公開註冊</td><td><code>auth.ts</code></td></tr>
-  <tr><td>2 開放的路徑</td><td>Better Auth 預設開很多路徑，PWA 只用得到三條</td><td>自己寫白名單，其他回 404</td><td><code>auth.ts</code></td></tr>
-  <tr><td>3 錯誤轉換</td><td>Better Auth 的錯誤格式和我們不同，登入失敗不能說哪裡錯</td><td><code>authError</code> 依序判斷，轉成 <code>AppError</code></td><td><code>auth.ts</code></td></tr>
-  <tr><td>4 擋猜密碼</td><td>同一個來源短時間內不能一直試密碼</td><td>Better Auth 內建 rateLimit，登入每個 IP 每分鐘 10 次</td><td><code>auth.ts</code></td></tr>
-  <tr><td>5 帳號資料表</td><td>存帳號和登入狀態，刪帳號時連帶刪資料</td><td>四張表放進我們自己的 migration</td><td><code>001_m0.sql</code></td></tr>
-  <tr><td>6 團隊重設密碼</td><td>沒有 email，忘記密碼要由團隊人工處理</td><td>團隊電腦上跑的指令，確認後換成臨時密碼</td><td><code>reset-password.ts</code></td></tr>
+<tr><th>段落</th><th>一句話</th></tr>
+<tr><td>1 狀態與按鈕</td><td>存四種狀態，兩種讀取時算</td></tr>
+<tr><td>2 接受</td><td>一個交易裡查、存、寫紀錄</td></tr>
+<tr><td>3 佔用時段與防重疊</td><td>程式排隊檢查，資料庫排除約束當保險</td></tr>
+<tr><td>4 出發、去不了、回報</td><td>共用 <code>change()</code>：鎖、算狀態、寫</td></tr>
+<tr><td>5 共用內容與個人活動</td><td>外出共用一列，在家存自己那一列</td></tr>
+<tr><td>6 活動清單</td><td>一次查詢，分三段排序</td></tr>
 </table></div>
+</div></details>
 
-<h2 id="setup" data-focus="auth.ts:12-57">1 設定與登入憑證</h2>
-<div class="parts">
-  <div class="b p"><h3>要解決的問題</h3><p>使用者用「使用者名稱加密碼」登入，系統不寄任何信，所以帳號沒有真的 email。PWA 和後端在不同網域，登入憑證要能跨網域帶過來。帳號只能由後端建立，不開放公開註冊（TS-003 §5.1、TS-001 §5.1）。</p></div>
-  <div class="b m"><h3>怎麼做</h3><p><code>auth.ts:21-68</code> 呼叫一次 <code>betterAuth({...})</code>，把所有設定放在一起，下表列出和這一段有關的項目。登入成功後，PWA 拿到一組 token，之後每個請求帶在 <code>Authorization: Bearer</code> 標頭裡。伺服器用 token 去 <code>sessions</code> 表找到對應的 session。session 是一列資料，代表「這支手機已登入」。</p><h4>這樣做的結果</h4><ul>
-    <li>登入回應的 body 裡有 <code>token</code>，不使用 cookie（<code>test/m0-db.test.ts</code> 的登入測試）。</li>
-    <li>使用者名稱註冊後不能改，這件事設了 <code>immutableUsername</code>，但 Better Auth 1.7 遇到 bearer token 時這個檢查不生效。真正擋住改名的是第 2 段不開放 <code>update-user</code>（<code>auth.ts:38-40</code>、ADR-0107）。</li>
-    <li>註冊在伺服器端呼叫 <code>auth.api.signUpEmail</code>，不受 <code>disabledPaths</code> 影響（<code>auth.ts:1-3</code>、ADR-0106），詳細屬於 Account。</li>
-    <li>沒設 <code>DATABASE_URL</code>（不碰資料庫的測試）時，啟動不檢查表（<code>auth.ts:56-57</code>）。</li>
-    <li>每個請求的登入檢查用 <code>auth.api.getSession</code> 查 session（<code>middleware.ts:51-59</code>），屬於請求管線。</li>
-  </ul></div>
-  <div class="b w"><h3>為什麼這樣做</h3><ul>
-    <li><b>Bearer token，不用 cookie：</b>前後端網域不同，不同網域的 cookie 算第三方 cookie，iPhone Safari 預設會擋，使用者可能一直被登出（ADR-0002 的 ADR-0009 段）。</li>
-    <li><b><code>bearer</code> 排第一個：</b>先把 token 換成 session（<code>auth.ts:32</code>）。</li>
-    <li><b>Better Auth 自己用 <code>pg</code> 連線池：</b>Better Auth 不支援 <code>Bun.sql</code>，連的還是 <code>app</code> 帳號（<code>auth.ts:22</code>、ADR-0002 的 ADR-0003 段）。</li>
-    <li><b>email 填佔位值：</b><code>username</code> 外掛要靠 email 加密碼的帳號機制，系統又不寄信（<code>auth.ts:29</code>）。</li>
-    <li><b>關掉 <code>displayUsername</code>：</b>顯示名稱是 M2 自己的欄位，避免有兩個「顯示名稱」（<code>auth.ts:41</code>）。</li>
-    <li><b>表名用複數：</b><code>user</code> 是 PostgreSQL 的保留字（<code>auth.ts:51</code>、ADR-0106）。</li>
-    <li><b>讀 <code>cf-connecting-ip</code>：</b>請求都經過 Cloudflare Tunnel，真實 IP 在這個標頭（<code>auth.ts:59-60</code>）。</li>
-    <li><b>365 天沒用才過期、每天第一次使用時延長：</b>文件沒寫理由，TS-001 §7 只把它列為 v0 想法（<code>auth.ts:48-49</code>）。</li>
-    <li><b>使用者名稱 4 到 20 字、密碼 8 到 128 字：</b>文件沒寫理由，TS-003 §7 只把它列為 v0 想法（ADR-0106）。</li>
-  </ul></div>
+<!-- MAP:start -->
+<h2 id="map">函式地圖</h2>
+<p>這張圖畫出誰呼叫誰；點方框可以在右邊看那個函式。</p>
+<figure class="zoom" data-open="展開全部函式" data-close="收起">
+<div class="scroll brief">
+<svg viewBox="0 0 800 434" role="img" aria-label="活動與回報的函式地圖：最上面一條是 routes.ts，左邊 POST /accept 呼叫 M3、M2、M1 的函式和 store.ts、rules.ts 的函式；右邊三個按鈕的路由都呼叫 change，change 呼叫 lockRow、itemOf、stateOf、deny；中間 GET / 呼叫 listOf，listOf 呼叫 itemOf">
+  <rect class="box bx-blue" x="40" y="40" width="170" height="34" rx="5"/>
+  <text data-ref="routes.ts:59-141" class="m mid" style="fill:var(--fg);font-size:13px" x="125.0" y="62">POST /accept</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="100" y="120" width="150" height="34" rx="5"/>
+  <text data-ref="store.ts:25-27" class="m mid" style="fill:var(--fg);font-size:13px" x="175.0" y="142">lockUser</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="100" y="180" width="150" height="34" rx="5"/>
+  <text data-ref="rules.ts:20-39" class="m mid" style="fill:var(--fg);font-size:13px" x="175.0" y="202">slotOf</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="100" y="240" width="150" height="34" rx="5"/>
+  <text data-ref="store.ts:45-60" class="m mid" style="fill:var(--fg);font-size:13px" x="175.0" y="262">saveActivity</text>
+  <rect class="box bx-blue" x="320" y="40" width="150" height="34" rx="5"/>
+  <text data-ref="routes.ts:34-51" class="m mid" style="fill:var(--fg);font-size:13px" x="395.0" y="62">change</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="380" y="120" width="150" height="34" rx="5"/>
+  <text data-ref="store.ts:64-73" class="m mid" style="fill:var(--fg);font-size:13px" x="455.0" y="142">lockRow</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="380" y="180" width="150" height="34" rx="5"/>
+  <text data-ref="rules.ts:64-82" class="m mid" style="fill:var(--fg);font-size:13px" x="455.0" y="202">deny</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="380" y="280" width="150" height="34" rx="5"/>
+  <text data-ref="store.ts:79-96" class="m mid" style="fill:var(--fg);font-size:13px" x="455.0" y="302">itemOf</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="380" y="370" width="150" height="34" rx="5"/>
+  <text data-ref="rules.ts:44-50" class="m mid" style="fill:var(--fg);font-size:13px" x="455.0" y="392">stateOf</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="600" y="40" width="150" height="34" rx="5"/>
+  <text data-ref="store.ts:100-124" class="m mid" style="fill:var(--fg);font-size:13px" x="675.0" y="62">listOf</text>
+  <path class="arw" marker-end="url(#a)" d="M70 74L70 137L100 137"/>
+  <path class="arw" marker-end="url(#a)" d="M70 137L70 197L100 197"/>
+  <path class="arw" marker-end="url(#a)" d="M70 197L70 257L100 257"/>
+  <path class="arw" marker-end="url(#a)" d="M350 74L350 137L380 137"/>
+  <path class="arw" marker-end="url(#a)" d="M350 137L350 197L380 197"/>
+  <path class="arw" marker-end="url(#a)" d="M350 197L350 297L380 297"/>
+  <path class="arw" marker-end="url(#a)" d="M350 297L350 387L380 387"/>
+  <path class="arw" marker-end="url(#a)" d="M675 74L675 297L530 297"/>
+  <path class="arw" marker-end="url(#a)" d="M455 314L455 370"/>
+</svg>
 </div>
+<div class="scroll detail">
+<svg viewBox="0 0 980 876" role="img" aria-label="活動與回報的函式地圖：最上面一條是 routes.ts，左邊 POST /accept 呼叫 M3、M2、M1 的函式和 store.ts、rules.ts 的函式；右邊三個按鈕的路由都呼叫 change，change 呼叫 lockRow、itemOf、stateOf、deny；中間 GET / 呼叫 listOf，listOf 呼叫 itemOf">
+  <rect class="box bx-gray" x="28" y="16" width="932" height="180" rx="8"/>
+  <text data-ref="routes.ts" class="s" x="38" style="font-size:13px;font-weight:500" y="34">routes.ts</text>
+  <rect class="box bx-none" x="28" y="216" width="194" height="226" rx="8"/>
+  <text class="s" x="38" style="font-size:13px;font-weight:500" y="234">M3 推薦模組</text>
+  <rect class="box bx-none" x="28" y="458" width="194" height="76" rx="8"/>
+  <text class="s" x="38" style="font-size:13px;font-weight:500" y="476">M2 帳號模組</text>
+  <rect class="box bx-gray" x="288" y="216" width="302" height="292" rx="8"/>
+  <text data-ref="store.ts" class="s" x="298" style="font-size:13px;font-weight:500" y="234">store.ts</text>
+  <rect class="box bx-gray" x="288" y="524" width="174" height="242" rx="8"/>
+  <text data-ref="rules.ts" class="s" x="298" style="font-size:13px;font-weight:500" y="542">rules.ts</text>
+  <rect class="box bx-none" x="288" y="782" width="174" height="76" rx="8"/>
+  <text class="s" x="298" style="font-size:13px;font-weight:500" y="800">M1 記憶模組</text>
+  <rect class="box bx-none" x="780" y="90" width="176" height="100" rx="8"/>
+  <rect class="box bx-none" x="32" y="238" width="186" height="200" rx="8"/>
+  <rect class="box bx-none" x="292" y="238" width="166" height="150" rx="8"/>
+  <rect class="box bx-none" x="292" y="404" width="166" height="100" rx="8"/>
+  <rect class="box bx-none" x="292" y="546" width="166" height="100" rx="8"/>
+  <rect class="box bx-none" x="292" y="662" width="166" height="100" rx="8"/>
+  <rect class="box bx-blue" x="40" y="48" width="170" height="34" rx="5"/>
+  <text data-ref="routes.ts:59-141" class="m mid" style="fill:var(--fg);font-size:13px" x="125.0" y="70">POST /accept</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="40" y="148" width="170" height="34" rx="5"/>
+  <text data-ref="routes.ts:26-30" class="m mid" style="fill:var(--fg);font-size:13px" x="125.0" y="170">rejected</text>
+  <rect class="box bx-blue" x="490" y="48" width="90" height="34" rx="5"/>
+  <text data-ref="routes.ts:56" class="m mid" style="fill:var(--fg);font-size:13px" x="535.0" y="70">GET /</text>
+  <rect class="box bx-blue" x="610" y="98" width="120" height="34" rx="5"/>
+  <text data-ref="routes.ts:34-51" class="m mid" style="fill:var(--fg);font-size:13px" x="670.0" y="120">change</text>
+  <rect class="box bx-blue" x="788" y="48" width="160" height="34" rx="5"/>
+  <text data-ref="routes.ts:144-155" class="m mid" style="fill:var(--fg);font-size:13px" x="868.0" y="70">POST /:id/set-out</text>
+  <rect class="box bx-blue" x="788" y="98" width="160" height="34" rx="5"/>
+  <text data-ref="routes.ts:158-173" class="m mid" style="fill:var(--fg);font-size:13px" x="868.0" y="120">POST /:id/cant-go</text>
+  <rect class="box bx-blue" x="788" y="148" width="160" height="34" rx="5"/>
+  <text data-ref="routes.ts:176-197" class="m mid" style="fill:var(--fg);font-size:13px" x="868.0" y="170">POST /:id/report</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="40" y="246" width="170" height="34" rx="5"/>
+  <text class="m mid" style="fill:var(--fg);font-size:13px" x="125.0" y="268">getServedCard</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="40" y="296" width="170" height="34" rx="5"/>
+  <text class="m mid" style="fill:var(--fg);font-size:13px" x="125.0" y="318">isCardStillServed</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="40" y="346" width="170" height="34" rx="5"/>
+  <text class="m mid" style="fill:var(--fg);font-size:13px" x="125.0" y="368">checkAcceptable</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="40" y="396" width="170" height="34" rx="5"/>
+  <text class="m mid" style="fill:var(--fg);font-size:13px" x="125.0" y="418">resetRound</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="40" y="488" width="170" height="34" rx="5"/>
+  <text class="m mid" style="fill:var(--fg);font-size:13px" x="125.0" y="510">getSettings</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="300" y="246" width="150" height="34" rx="5"/>
+  <text data-ref="store.ts:25-27" class="m mid" style="fill:var(--fg);font-size:13px" x="375.0" y="268">lockUser</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="300" y="296" width="150" height="34" rx="5"/>
+  <text data-ref="store.ts:30-37" class="m mid" style="fill:var(--fg);font-size:13px" x="375.0" y="318">slotsOf</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="300" y="346" width="150" height="34" rx="5"/>
+  <text data-ref="store.ts:45-60" class="m mid" style="fill:var(--fg);font-size:13px" x="375.0" y="368">saveActivity</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="300" y="412" width="150" height="34" rx="5"/>
+  <text data-ref="store.ts:64-73" class="m mid" style="fill:var(--fg);font-size:13px" x="375.0" y="434">lockRow</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="300" y="462" width="150" height="34" rx="5"/>
+  <text data-ref="store.ts:79-96" class="m mid" style="fill:var(--fg);font-size:13px" x="375.0" y="484">itemOf</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="490" y="440" width="90" height="34" rx="5"/>
+  <text data-ref="store.ts:100-124" class="m mid" style="fill:var(--fg);font-size:13px" x="535.0" y="462">listOf</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="300" y="554" width="150" height="34" rx="5"/>
+  <text data-ref="rules.ts:44-50" class="m mid" style="fill:var(--fg);font-size:13px" x="375.0" y="576">stateOf</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="300" y="604" width="150" height="34" rx="5"/>
+  <text data-ref="rules.ts:64-82" class="m mid" style="fill:var(--fg);font-size:13px" x="375.0" y="626">deny</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="300" y="670" width="150" height="34" rx="5"/>
+  <text data-ref="rules.ts:20-39" class="m mid" style="fill:var(--fg);font-size:13px" x="375.0" y="692">slotOf</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="300" y="720" width="150" height="34" rx="5"/>
+  <text data-ref="rules.ts:103-108" class="m mid" style="fill:var(--fg);font-size:13px" x="375.0" y="742">savedOf</text>
+  <rect class="box" style="fill:var(--panel);stroke:var(--muted)" x="300" y="812" width="150" height="34" rx="5"/>
+  <text class="m mid" style="fill:var(--fg);font-size:13px" x="375.0" y="834">appendTodayLog</text>
+  <path class="arw" marker-end="url(#a)" d="M100 82L100 148"/>
+  <path class="arw" marker-end="url(#a)" d="M210 65L240 65L240 313L292 313"/>
+  <path class="arw" marker-end="url(#a)" d="M240 288L218 288"/>
+  <path class="arw" marker-end="url(#a)" d="M240 313L240 452L292 452"/>
+  <path class="arw" marker-end="url(#a)" d="M240 452L240 505L210 505"/>
+  <path class="arw" marker-end="url(#a)" d="M240 505L240 710L292 710"/>
+  <path class="arw" marker-end="url(#a)" d="M240 710L240 829L300 829"/>
+  <path class="arw" marker-end="url(#a)" d="M535 82L535 440"/>
+  <path class="arw" marker-end="url(#a)" d="M490 468L450 468"/>
+  <path class="arw" marker-end="url(#a)" d="M400 496L400 554"/>
+  <path class="arw" marker-end="url(#a)" d="M788 65L680 65L680 98"/>
+  <path class="arw" marker-end="url(#a)" d="M788 115L730 115"/>
+  <path class="arw" marker-end="url(#a)" d="M788 165L680 165L680 132"/>
+  <path class="arw" marker-end="url(#a)" d="M640 132L640 490L458 490"/>
+  <path class="arw" marker-end="url(#a)" d="M640 490L640 571L458 571"/>
+  <path class="arw" marker-end="url(#a)" d="M956 148L968 148L968 829L450 829"/>
+  <rect class="box bx-none" x="620" y="624" width="318" height="106" rx="8"/>
+  <text class="t" x="634" y="648">怎麼看這張圖</text>
+  <rect class="box bx-gray" x="634" y="661" width="44" height="16" rx="4"/>
+  <text class="s" x="692" y="674">灰色大框是一個檔案，裡面的方框是函式</text>
+  <rect class="box bx-blue" x="634" y="683" width="44" height="16" rx="4"/>
+  <text class="s" x="692" y="696">藍色方框：請求進來後經過的路由函式</text>
+  <path class="arw" marker-end="url(#a)" d="M634 714H678"/>
+  <text class="s" x="692" y="718">黑線：這個函式直接呼叫那個函式</text>
+</svg>
+</div>
+<figcaption>簡圖只畫主路：左邊是接受，中間是三個按鈕共用的 <code>change</code>，右邊是 <code>GET /</code> 用的活動清單 <code>listOf</code>。按「展開全部函式」看每一個函式、檔案和其他模組。</figcaption>
+</figure>
+<details class="more"><summary>地圖說明：3 點</summary><div class="in">
+<ul>
+  <li>點方框在右邊看那個函式，點檔名看整個檔案。</li>
+  <li>展開後的虛線框圈住幾個函式：指到框上的線代表每一個都呼叫；虛線的檔案框是其他頁的模組。</li>
+  <li>沒畫：M0 到處用的 <code>forUser</code>、<code>logEvent</code>、<code>validate</code>、<code>AppError</code>，和 <code>bucketOf</code>、<code>sameActivity</code>、<code>noteMemoryChanged</code>。</li>
+</ul>
+</div></details>
+<!-- MAP:end -->
 
+<h2 id="state" data-focus="rules.ts:41-82">1 狀態與按鈕</h2>
+<p class="lead">活動有六種狀態，畫面要知道現在能按哪些按鈕。</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 470" role="img" aria-label="活動狀態機：已安排經出發變進行中，回報後變已完成或未進行；結束時間過了變待回報，活動日過了變未回報">
+  <rect class="box bx-gray" x="20" y="160" width="100" height="40" rx="20"/>
+  <text class="t mid" x="70" y="185">接受</text>
+  <path class="arw" marker-end="url(#a)" d="M120 180H180"/>
+
+  <rect class="box bx-blue" x="180" y="140" width="150" height="80" rx="6"/>
+  <text data-ref="006_m5.sql:28" class="t mid" x="255" y="166">已安排</text>
+  <text class="m mid" x="255" y="186">scheduled</text>
+  <text class="s mid" x="255" y="206">存在資料庫</text>
+
+  <rect class="box bx-blue" x="400" y="140" width="150" height="80" rx="6"/>
+  <text data-ref="006_m5.sql:28" class="t mid" x="475" y="166">進行中</text>
+  <text class="m mid" x="475" y="186">in_progress</text>
+  <text class="s mid" x="475" y="206">存在資料庫</text>
+
+  <path class="arw" marker-end="url(#a)" d="M330 180H400"/>
+  <text class="lab mid" x="365" y="172">我出發了</text>
+
+  <rect class="box bx-none" x="620" y="70" width="160" height="192" rx="8"/>
+  <text class="s mid" x="700" y="88">最後結果，不能改</text>
+  <rect class="box bx-teal" x="636" y="100" width="128" height="62" rx="6"/>
+  <text class="t mid" x="700" y="126">未進行</text>
+  <text class="m mid" x="700" y="146">not_done</text>
+  <rect class="box bx-teal" x="636" y="180" width="128" height="62" rx="6"/>
+  <text class="t mid" x="700" y="206">已完成</text>
+  <text class="m mid" x="700" y="226">completed</text>
+
+  <path class="arw" marker-end="url(#a)" d="M550 180H620"/>
+  <text class="lab mid" x="585" y="172">回報</text>
+
+  <path class="arw" marker-end="url(#a)" d="M255 140V40H700V70"/>
+  <text class="lab mid" x="480" y="34">去不了</text>
+
+  <rect class="box bx-gold" x="300" y="340" width="200" height="76" rx="6"/>
+  <text data-ref="rules.ts:47" class="t mid" x="400" y="366">待回報</text>
+  <text class="m mid" x="400" y="386">pending_report</text>
+  <text class="s mid" x="400" y="406">讀取時算，沒有存</text>
+
+  <path class="arw" marker-end="url(#a)" d="M255 220V380H300"/>
+  <text class="lab" x="262" y="300">到結束時間</text>
+  <path class="arw" marker-end="url(#a)" d="M475 220V340"/>
+  <text class="lab" x="483" y="290">到結束時間</text>
+
+  <path class="arw" marker-end="url(#a)" d="M500 378H700V262"/>
+  <text class="lab mid" x="600" y="370">回報</text>
+
+  <rect class="box bx-rust" x="20" y="340" width="200" height="76" rx="6"/>
+  <text data-ref="rules.ts:46" class="t mid r" x="120" y="366">未回報</text>
+  <text class="m mid" x="120" y="386">unreported</text>
+  <text class="s mid" x="120" y="406">最後結果，不是完成</text>
+
+  <path class="arw" marker-end="url(#a)" d="M400 416V448H120V416"/>
+  <text class="lab mid" x="260" y="440">活動日過了（臺灣時間 00:00）</text>
+</svg>
+</div>
+<figcaption>藍色、青色存在資料庫，金色、紅色是讀取時算出來的。</figcaption>
+</figure>
+<div class="parts tight">
+  <div class="b p"><h3>問題</h3><p>其中兩種狀態是時間造成的，而且判斷「今天」不能看手機的時鐘（PRD-001 §4）。</p></div>
+  <div class="b m"><h3>做法</h3><p>資料庫只存四種，待回報、未回報每次讀取時用伺服器時間算（<code>rules.ts:44-50</code>）。</p></div>
+  <div class="b w"><h3>為什麼</h3><p>讀取時算，不用排程改資料：午夜那一刻伺服器剛好停機也不會漏（ADR-0604）。</p></div>
+</div>
+<details class="more"><summary>細節：3 點結果、4 個原因、時間軸圖</summary><div class="in">
+<h4>結果</h4><ul>
+  <li>未回報不改資料，資料庫裡還是 <code>scheduled</code> 或 <code>in_progress</code>（<code>rules.ts:41-42</code>）。</li>
+  <li>已安排過了結束時間就是待回報，不用先按我出發了就能回報（<code>rules.ts:57</code>）。</li>
+  <li>舊畫面按了不能按的：多半回 <code>CONFLICT</code> 帶 <code>reason</code>，未回報回 <code>DEADLINE_PASSED</code>（<code>rules.ts:64-82</code>）。</li>
+</ul>
+<h4>原因</h4><ul>
+  <li><b>「我出發了只在當天」不另外查：</b>活動日就是接受那天（ADR-0604、<code>rules.ts:52-53</code>）。</li>
+  <li><b>還沒結束時不給直接回報：</b>先出發再回報（PRD-001 §8.1、ADR-0604）。</li>
+  <li><b>未回報不是完成：</b>時間過了不代表做了（PRD-001 §7.4、<code>rules.ts:46</code>）。</li>
+  <li><b>沒有取消、取代狀態：</b>已安排的活動不能取消或被取代（PRD-001 §5.3）。</li>
+</ul>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 190" role="img" aria-label="時間軸：接受到結束前照存的狀態，結束到活動日午夜是待回報，午夜之後是未回報">
+  <text class="s" x="40" y="30">活動日 10/22，活動 15:30 結束</text>
+
+  <rect class="box bx-blue" x="40" y="50" width="320" height="76"/>
+  <text class="t mid" x="200" y="76">結束前：照資料庫存的狀態</text>
+  <text class="s mid" x="200" y="96">scheduled 或 in_progress</text>
+  <text class="m mid" x="200" y="114">rules.ts:49</text>
+
+  <rect class="box bx-gold" x="360" y="50" width="260" height="76"/>
+  <text class="t mid" x="490" y="76">待回報 pending_report</text>
+  <text class="s mid" x="490" y="96">到 10/22 23:59:59 都還能回報</text>
+  <text class="m mid" x="490" y="114">rules.ts:47</text>
+
+  <rect class="box bx-rust" x="620" y="50" width="140" height="76"/>
+  <text class="t mid r" x="690" y="76">未回報</text>
+  <text class="s mid" x="690" y="96">unreported</text>
+  <text class="m mid" x="690" y="114">rules.ts:46</text>
+
+  <path class="arw" d="M40 126V140"/>
+  <path class="arw" d="M360 126V140"/>
+  <path class="arw" d="M620 126V140"/>
+  <text class="s" x="40" y="160">接受 accepted_at</text>
+  <text class="s mid" x="360" y="160">15:30 end_at</text>
+  <text class="s mid" x="620" y="160">10/23 00:00:00</text>
+</svg>
+</div>
+<figcaption>例：活動日 10/22、15:30 結束；到 <code>end_at</code> 變待回報，臺灣日期過了活動日變未回報（<code>rules.ts:43</code>）。</figcaption>
+</figure>
+</div></details>
+
+<h2 id="accept" data-focus="routes.ts:24-30,58-141">2 接受</h2>
+<p class="lead">按確認後把那張卡存成一筆已安排的活動，連點兩下也只有一筆。</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 740" role="img" aria-label="接受活動的流程：取卡、進交易後鎖人、查是否接受過、查卡是否過期、檢查設定和時段、存活動、寫紀錄，交易外重置一輪；右邊是各種被擋的結果">
+  <rect class="box bx-gray" x="40" y="10" width="380" height="36" rx="18"/>
+  <text class="t mid" x="230" y="33">POST /api/activities/accept，帶 cardId</text>
+  <path class="arw" marker-end="url(#a)" d="M230 46V62"/>
+
+  <rect class="box bx-blue" x="40" y="62" width="380" height="44" rx="6"/>
+  <text class="t" x="56" y="81">取 M3 留的那張卡 getServedCard</text>
+  <text class="m" x="56" y="98">routes.ts:64</text>
+  <text class="s" x="440" y="88">在交易外：M3 讀自己的資料</text>
+
+  <rect class="box bx-none" x="20" y="122" width="760" height="472" rx="8"/>
+  <text class="s end" x="770" y="140">同一個 forUser 交易：一起成功才算數</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 106V150"/>
+  <rect class="box bx-blue" x="40" y="150" width="380" height="44" rx="6"/>
+  <text class="t" x="56" y="169">鎖住這個人（排隊）</text>
+  <text class="m" x="56" y="186">routes.ts:69</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 194V214"/>
+  <rect class="box bx-blue" x="40" y="214" width="380" height="44" rx="6"/>
+  <text class="t" x="56" y="233">這張卡接受過了嗎？</text>
+  <text class="m" x="56" y="250">routes.ts:72-73</text>
+  <path class="arw" marker-end="url(#a)" d="M420 236H500"/>
+  <text class="lab mid" x="460" y="230">是</text>
+  <rect class="box bx-gray" x="500" y="216" width="280" height="40" rx="6"/>
+  <text class="mid" x="640" y="241">回那一筆（200），不寫紀錄、不重置</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 258V278"/>
+  <rect class="box bx-blue" x="40" y="278" width="380" height="44" rx="6"/>
+  <text class="t" x="56" y="297">卡還在這一輪、時段算得出來？</text>
+  <text class="m" x="56" y="314">routes.ts:78</text>
+  <path class="arw-r" marker-end="url(#ar)" d="M420 300H500"/>
+  <text class="lab mid" x="460" y="294">否</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 322V342"/>
+  <rect class="box bx-blue" x="40" y="342" width="380" height="44" rx="6"/>
+  <text class="t" x="56" y="361">用最新設定和已安排時段再查</text>
+  <text class="m" x="56" y="378">routes.ts:81-87</text>
+  <path class="arw-r" marker-end="url(#ar)" d="M420 364H500"/>
+  <text class="lab mid" x="460" y="358">不通過</text>
+
+  <rect class="box bx-rust" x="500" y="280" width="280" height="116" rx="6"/>
+  <text class="t r" x="516" y="302">被擋</text>
+  <text class="s" x="516" y="322">card_expired → 404</text>
+  <text class="s" x="516" y="340">time_conflict、limit、diet → 409</text>
+  <text class="s" x="516" y="358">先記 activity_accept_rejected 事件</text>
+  <text class="s" x="516" y="376">交易提交後才丟錯誤</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 386V406"/>
+  <rect class="box bx-blue" x="40" y="406" width="380" height="44" rx="6"/>
+  <text class="t" x="56" y="425">找或新增共用內容（外出）</text>
+  <text class="m" x="56" y="442">routes.ts:94-99</text>
+  <text class="s" x="440" y="432">在家：內容存在個人活動那一列</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 450V470"/>
+  <rect class="box bx-blue" x="40" y="470" width="380" height="44" rx="6"/>
+  <text class="t" x="56" y="489">新增個人活動，狀態 scheduled</text>
+  <text class="m" x="56" y="506">routes.ts:101-106</text>
+  <path class="arw-r" marker-end="url(#ar)" d="M420 492H500"/>
+  <text class="lab mid" x="460" y="486">約束擋下</text>
+  <rect class="box bx-rust" x="500" y="462" width="280" height="60" rx="6"/>
+  <text class="t r" x="516" y="484">23P01 → time_conflict（409）</text>
+  <text class="s" x="516" y="504">交易取消，不記被擋事件</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 514V534"/>
+  <rect class="box bx-blue" x="40" y="534" width="380" height="44" rx="6"/>
+  <text class="t" x="56" y="553">寫今天的紀錄、記事件</text>
+  <text class="m" x="56" y="570">routes.ts:111-125</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 578V618"/>
+  <rect class="box bx-teal" x="40" y="618" width="380" height="44" rx="6"/>
+  <text class="t" x="56" y="637">交易提交後，讓 M3 重置這一輪</text>
+  <text class="m" x="56" y="654">routes.ts:138</text>
+  <text class="s" x="440" y="645">失敗只記 log，照樣回成功</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 662V684"/>
+  <rect class="box bx-gray" x="40" y="684" width="380" height="36" rx="18"/>
+  <text class="t mid" x="230" y="707">回傳這一筆 MyActivity</text>
+</svg>
+</div>
+<figcaption>虛線大框是同一個交易，紅色虛線是被擋的路。</figcaption>
+</figure>
+<div class="parts tight">
+  <div class="b p"><h3>問題</h3><p>卡可能放了很久、設定可能剛改過，使用者也可能連點兩下或用兩支手機同時按（TS-006 §4）。</p></div>
+  <div class="b m"><h3>做法</h3><p>一個交易裡鎖人、查、存活動、寫紀錄和事件，提交後才叫 M3 重置這一輪（<code>routes.ts:138</code>）。</p></div>
+  <div class="b w"><h3>為什麼</h3><p>接受、紀錄、事件一起成功，有一步失敗就都不寫（TS-006 §5.9）。</p></div>
+</div>
+<details class="more"><summary>細節：4 點結果、4 個原因</summary><div class="in">
+<h4>結果</h4><ul>
+  <li>同一張卡再接受一次，回現在那一筆，不再寫紀錄、事件，也不重置一輪（<code>routes.ts:72-73</code>）。</li>
+  <li>程式擋下會留 <code>activity_accept_rejected</code> 事件；排除約束擋下（<code>23P01</code>）沒有（<code>routes.ts:128-131</code>）。</li>
+  <li>今天的紀錄寫不進去，整個交易取消，同一把 key 可以再送（<code>test/m5-activities.test.ts</code>）。</li>
+  <li>活動已經開始照樣接受，開始時間用卡片上的（<code>rules.ts:15</code>）。</li>
+</ul>
+<h4>原因</h4><ul>
+  <li><b>鎖住後再問 M3 卡還在不在：</b>一輪只該接受一個活動（ADR-0906、<code>routes.ts:77-78</code>）。</li>
+  <li><b>同一張卡只建一筆：</b>連點兩下的 key 可能不同，防重複寫入擋不住（ADR-0603）。</li>
+  <li><b>被擋時回傳不丟錯：</b>丟錯會取消交易，事件記不下來（ADR-0606）。</li>
+  <li><b>重置在交易之後，失敗不擋：</b>回錯誤使用者會以為沒接受成功（ADR-0307、<code>routes.ts:137</code>）。</li>
+</ul>
+</div></details>
+
+<h2 id="slot" data-focus="rules.ts:13-39">3 佔用時段與防重疊</h2>
+<p class="lead">每筆活動佔一段時間，同一個人的有效活動不能重疊。</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 476" role="img" aria-label="同一個人兩個時間重疊的接受同時進來：請求 A 拿到鎖、讀時段、存好提交；請求 B 在 lockUser 等，A 放開鎖後讀到 A 那一筆，被 checkAcceptable 擋下；最下面是資料庫的排除約束當保險">
+  <text class="t mid" x="190" y="24">請求 A</text>
+  <text class="t mid" x="610" y="24">請求 B</text>
+
+  <rect class="box bx-blue" x="40" y="40" width="300" height="48" rx="6"/>
+  <text data-ref="store.ts:25-27" class="t" x="56" y="60">lockUser 拿到鎖</text>
+  <text class="s" x="56" y="78">advisory lock，鑰匙是使用者的代號</text>
+
+  <path class="arw" marker-end="url(#a)" d="M190 88V110"/>
+  <rect class="box bx-blue" x="40" y="110" width="300" height="48" rx="6"/>
+  <text data-ref="store.ts:30-37" class="t" x="56" y="130">slotsOf 讀當天佔著的時段</text>
+  <text class="s" x="56" y="148">沒有重疊，checkAcceptable 通過</text>
+
+  <path class="arw" marker-end="url(#a)" d="M190 158V180"/>
+  <rect class="box bx-teal" x="40" y="180" width="300" height="48" rx="6"/>
+  <text class="t" x="56" y="200">存成 scheduled，提交</text>
+  <text class="s" x="56" y="218">交易結束，鎖自動放開</text>
+
+  <rect class="box bx-gold" x="460" y="40" width="300" height="48" rx="6"/>
+  <text data-ref="store.ts:25-27" class="t" x="476" y="60">lockUser 等鎖</text>
+  <text class="s" x="476" y="78">A 的交易還沒結束</text>
+
+  <path class="arw" marker-end="url(#a)" d="M610 88V250"/>
+  <text class="lab" x="620" y="172">等 A 提交</text>
+
+  <path class="arw" marker-end="url(#a)" d="M340 204H400V274H460"/>
+  <text class="lab mid" x="370" y="196">放開鎖</text>
+
+  <rect class="box bx-blue" x="460" y="250" width="300" height="48" rx="6"/>
+  <text data-ref="store.ts:30-37" class="t" x="476" y="270">拿到鎖，slotsOf 讀時段</text>
+  <text class="s" x="476" y="288">讀得到 A 剛存的那一筆</text>
+
+  <path class="arw-r" marker-end="url(#ar)" d="M610 298V320"/>
+  <rect class="box bx-rust" x="460" y="320" width="300" height="48" rx="6"/>
+  <text data-ref="routes.ts:79-91" class="t r" x="476" y="340">checkAcceptable 擋下</text>
+  <text class="s" x="476" y="358">time_conflict（409）</text>
+
+  <rect class="box bx-gray" x="40" y="404" width="720" height="52" rx="6"/>
+  <text data-ref="006_m5.sql:40-42" class="t" x="56" y="425">資料庫這層的保險：排除約束 user_activities_no_overlap</text>
+  <text class="s" x="56" y="444">同一個人 scheduled、in_progress 的時段重疊就擋，錯誤碼 23P01 轉成 time_conflict</text>
+</svg>
+</div>
+<figcaption>兩個重疊的接受同時進來：B 在 <code>lockUser</code> 等 A 提交，再讀到 A 那一筆而被擋。</figcaption>
+</figure>
+<div class="parts tight">
+  <div class="b p"><h3>問題</h3><p>兩個請求幾乎同時進來，兩個都先查「沒衝突」再寫，就會兩筆都存（ADR-0603）。</p></div>
+  <div class="b m"><h3>做法</h3><p>程式用 <code>lockUser</code> 讓同一個人的接受排隊再比時段，資料庫的排除約束當保險（<code>store.ts:25-27</code>）。</p></div>
+  <div class="b w"><h3>為什麼</h3><p>只靠排除約束擋不了最新的明確限制，也沒辦法記被擋的事件（ADR-0603）。</p></div>
+</div>
+<details class="more"><summary>細節：4 點結果、4 個原因、1 張表</summary><div class="in">
+<h4>佔用時段（<code>rules.ts:20-39</code>）</h4><div class="tbl"><table>
+<tr><th>種類</th><th>開始（進位到整分）</th><th>結束（最晚午夜）</th></tr>
+<tr><td>場次</td><td>卡片的開始</td><td>卡片的結束，沒有就加長度</td></tr>
+<tr><td>地點類</td><td>接受加走路，等到開門</td><td>開始加長度</td></tr>
+<tr><td>在家</td><td>接受時間</td><td>開始加長度</td></tr>
+</table></div>
+<h4>結果</h4><ul>
+  <li><code>slotOf</code> 回 <code>null</code> 時當成卡過期，回 <code>card_expired</code>（<code>routes.ts:78-91</code>）。</li>
+  <li>範圍是 <code>'[)'</code>：15:00 結束和 15:00 開始可以接在一起（<code>006_m5.sql:38-39</code>）。</li>
+  <li>過了結束時間還沒回報，仍算佔著時段（<code>store.ts:29</code>）。</li>
+  <li>按去不了或回報之後，時段馬上釋放（<code>store.ts:33</code>）。</li>
+</ul>
+<h4>原因</h4><ul>
+  <li><b>算法跟 M3 一樣：</b>出卡和接受兩邊才一致（ADR-0602、<code>rules.ts:13-14</code>）。</li>
+  <li><b>不含兩地的走路時間：</b>接得近、地點又遠時可能遲到（TS-006 §5.6）。</li>
+  <li><b>用 advisory lock，不鎖 <code>profiles</code>：</b>不碰別的模組的表（ADR-0603、<code>store.ts:23-24</code>）。</li>
+  <li><b>不用 serializable：</b>衝突要整個重來，錯誤不好轉成 <code>time_conflict</code>（ADR-0603）。</li>
+</ul>
+</div></details>
+
+<h2 id="actions" data-focus="routes.ts:32-51,143-197">4 出發、去不了、回報</h2>
+<p class="lead">三個按鈕共用一個流程，用按下去那一刻的狀態判斷能不能做。</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 640" role="img" aria-label="我出發了、去不了、回報三個按鈕共用 change：取現在時間、開交易、鎖住那一列、算狀態、deny 判斷能不能按，能按才寫入，回最新的那一筆；去不了和回報在提交後通知 M3">
+  <rect class="box bx-gray" x="40" y="16" width="200" height="36" rx="18"/>
+  <text data-ref="routes.ts:144-155" class="t mid" x="140" y="39">我出發了 set-out</text>
+  <rect class="box bx-gray" x="300" y="16" width="200" height="36" rx="18"/>
+  <text data-ref="routes.ts:158-173" class="t mid" x="400" y="39">去不了 cant-go</text>
+  <rect class="box bx-gray" x="560" y="16" width="200" height="36" rx="18"/>
+  <text data-ref="routes.ts:176-197" class="t mid" x="660" y="39">回報 report</text>
+  <path class="arw" marker-end="url(#a)" d="M140 52V90"/>
+  <path class="arw" marker-end="url(#a)" d="M400 52V90"/>
+  <path class="arw" marker-end="url(#a)" d="M660 52V90"/>
+
+  <rect class="box bx-blue" x="40" y="90" width="720" height="44" rx="6"/>
+  <text data-ref="routes.ts:34-51" class="t" x="56" y="109">change()：先取現在時間 now，再開 forUser 交易</text>
+  <text class="m" x="56" y="126">routes.ts:40-42</text>
+
+  <rect class="box bx-none" x="20" y="154" width="760" height="398" rx="8"/>
+  <text class="s end" x="770" y="172">同一個交易</text>
+
+  <path class="arw" marker-end="url(#a)" d="M240 134V186"/>
+  <rect class="box bx-blue" x="40" y="186" width="400" height="44" rx="6"/>
+  <text data-ref="store.ts:64-73" class="t" x="56" y="205">lockRow 鎖住那一列（for update）</text>
+  <text class="m" x="56" y="222">routes.ts:43</text>
+  <path class="arw-r" marker-end="url(#ar)" d="M440 208H520"/>
+  <text class="lab mid" x="480" y="200">沒有這列</text>
+  <rect class="box bx-rust" x="520" y="186" width="240" height="44" rx="6"/>
+  <text class="t r" x="536" y="205">NOT_FOUND</text>
+  <text class="s" x="536" y="222">別人的活動也是這個</text>
+
+  <path class="arw" marker-end="url(#a)" d="M240 230V250"/>
+  <rect class="box bx-blue" x="40" y="250" width="400" height="44" rx="6"/>
+  <text data-ref="rules.ts:44-50" class="t" x="56" y="269">stateOf 用 now 算現在的狀態</text>
+  <text class="m" x="56" y="286">routes.ts:46</text>
+
+  <path class="arw" marker-end="url(#a)" d="M240 294V314"/>
+  <rect class="box bx-blue" x="40" y="314" width="400" height="44" rx="6"/>
+  <text data-ref="rules.ts:64-82" class="t" x="56" y="333">deny：這個狀態能按這個按鈕嗎？</text>
+  <text class="m" x="56" y="350">routes.ts:46-47</text>
+  <path class="arw-r" marker-end="url(#ar)" d="M440 336H520"/>
+  <text class="lab mid" x="480" y="328">不能</text>
+  <rect class="box bx-rust" x="520" y="300" width="240" height="72" rx="6"/>
+  <text class="t r" x="536" y="322">CONFLICT 帶 reason</text>
+  <text class="s" x="536" y="342">未回報是 DEADLINE_PASSED</text>
+  <text class="s" x="536" y="360">丟錯，交易取消</text>
+
+  <path class="arw" marker-end="url(#a)" d="M240 358V378"/>
+  <rect class="box bx-blue" x="40" y="378" width="400" height="92" rx="6"/>
+  <text class="t" x="56" y="398">write：各自的寫入</text>
+  <text class="s" x="56" y="420">set-out：狀態變 in_progress，記 set_out_at</text>
+  <text class="s" x="56" y="440">cant-go：狀態變 not_done，寫今天的紀錄</text>
+  <text class="s" x="56" y="460">report：狀態變 result，寫今天的紀錄</text>
+
+  <path class="arw" marker-end="url(#a)" d="M240 470V490"/>
+  <rect class="box bx-blue" x="40" y="490" width="400" height="44" rx="6"/>
+  <text data-ref="store.ts:79-96" class="t" x="56" y="509">itemOf 算出最新的 MyActivity</text>
+  <text class="m" x="56" y="526">routes.ts:49</text>
+
+  <path class="arw" marker-end="url(#a)" d="M240 534V572"/>
+  <rect class="box bx-teal" x="40" y="572" width="400" height="44" rx="6"/>
+  <text class="t" x="56" y="591">提交後：noteMemoryChanged</text>
+  <text class="s" x="56" y="608">只有 cant-go、report；set-out 不呼叫</text>
+</svg>
+</div>
+<figcaption>三個按鈕都走同一條路，紅色虛線是不能按時回的錯誤。</figcaption>
+</figure>
+<div class="parts tight">
+  <div class="b p"><h3>問題</h3><p>按鈕可能被舊畫面按到、被兩個分頁同時按，或在午夜前後按（TS-006 §4.2）。</p></div>
+  <div class="b m"><h3>做法</h3><p>共用 <code>change()</code>：鎖住那一列、算狀態、不能按就丟錯、能按才寫（<code>routes.ts:34-51</code>）。</p></div>
+  <div class="b w"><h3>為什麼</h3><p>鎖住那一列再算狀態，同時按兩個按鈕時，第二個看到的是第一個做完的狀態（ADR-0604）。</p></div>
+</div>
+<details class="more"><summary>細節：4 點結果、4 個原因、1 張表</summary><div class="in">
 <div class="tbl"><table>
-  <tr><th>設定</th><th>值</th><th>行</th></tr>
-  <tr><td><code>database</code></td><td>自己的 <code>pg</code> 連線池，連 <code>DATABASE_URL</code></td><td><code>auth.ts:23</code></td></tr>
-  <tr><td><code>trustedOrigins</code></td><td>讀 <code>APP_ORIGIN</code>，逗號分隔，和來源檢查共用</td><td><code>auth.ts:14-19</code>、<code>auth.ts:27</code></td></tr>
-  <tr><td><code>emailAndPassword</code></td><td>開啟，密碼長度用 <code>@app/shared</code> 的 <code>PASSWORD_RULE</code></td><td><code>auth.ts:30</code></td></tr>
-  <tr><td><code>plugins</code></td><td><code>bearer()</code> 在前，<code>username()</code> 在後，名稱規則用 <code>USERNAME_RULE</code></td><td><code>auth.ts:31-43</code></td></tr>
-  <tr><td><code>disabledPaths</code></td><td><code>/sign-up/email</code></td><td><code>auth.ts:46</code></td></tr>
-  <tr><td><code>session</code></td><td>表名 <code>sessions</code>，<code>expiresIn</code> 365 天，<code>updateAge</code> 1 天</td><td><code>auth.ts:49</code></td></tr>
-  <tr><td>表名</td><td><code>users</code>、<code>accounts</code>、<code>verifications</code></td><td><code>auth.ts:52-54</code></td></tr>
-  <tr><td><code>advanced.database</code></td><td>id 用 uuid；有設 <code>DATABASE_URL</code> 才檢查表</td><td><code>auth.ts:57</code></td></tr>
+<tr><th>動作</th><th>允許的狀態</th><th>變成</th><th>今天的紀錄</th></tr>
+<tr><td><code>set-out</code></td><td><code>scheduled</code></td><td><code>in_progress</code></td><td>不寫</td></tr>
+<tr><td><code>cant-go</code></td><td><code>scheduled</code></td><td><code>not_done</code></td><td><code>cant_go</code></td></tr>
+<tr><td><code>report</code></td><td><code>in_progress</code>、<code>pending_report</code></td><td><code>result</code></td><td><code>reported</code></td></tr>
 </table></div>
+<h4>結果</h4><ul>
+  <li>別人的活動和不存在的 id 都回 <code>NOT_FOUND</code>（<code>routes.ts:44</code>）。</li>
+  <li>判斷和寫入用的 <code>now</code> 在等鎖之前就取了（<code>routes.ts:40</code>）。</li>
+  <li>回報時今天的紀錄寫不進去，狀態不變，也沒有事件（<code>test/m5-activities.test.ts</code>）。</li>
+  <li>去不了、回報在提交後通知 M3；我出發了不通知（<code>routes.ts:171</code>）。</li>
+</ul>
+<h4>原因</h4><ul>
+  <li><b>我出發了不寫今天的紀錄：</b>它不是使用者說的話（TS-006 §5.9、<code>routes.ts:143</code>）。</li>
+  <li><b>去不了不是取消：</b>紀錄留著，時段釋放（PRD-001 §5.3、<code>routes.ts:157</code>）。</li>
+  <li><b>通知 M3：</b>下次先用新紀錄重新評分沒看過的卡（ADR-0903）。</li>
+  <li><b>事件不記備註原文：</b>TS-006 §7、ADR-0608 這樣寫，沒寫理由（<code>routes.ts:166</code>）。</li>
+</ul>
+</div></details>
 
-<h2 id="paths" data-focus="auth.ts:70-82">2 開放的路徑</h2>
-<div class="parts">
-  <div class="b p"><h3>要解決的問題</h3><p>Better Auth 的處理器預設開很多路徑，例如 <code>update-user</code>（會改到使用者名稱，TS-003 §2 規定註冊後不能改）、<code>sign-in/email</code>、<code>list-sessions</code>。PWA 用得到的只有登入、登出、改密碼。</p></div>
-  <div class="b m"><h3>怎麼做</h3><p><code>authRoutes</code>（<code>auth.ts:75-82</code>）接住 <code>/api/auth</code> 底下的每個請求，去掉前綴後組成「方法 路徑」，例如 <code>POST /sign-out</code>。這個字串不在 <code>OPEN</code> 集合裡就丟 <code>NOT_FOUND</code>（<code>auth.ts:77</code>），在的話才交給 <code>auth.handler</code>（<code>auth.ts:79</code>）。<code>OPEN</code> 裡有 3 條（<code>auth.ts:73</code>）。</p><h4>這樣做的結果</h4><ul>
-    <li><code>authRoutes</code> 掛在登入檢查前面（<code>app.ts:53-54</code>），這 3 條請求不經過 <code>requireAuth</code> 和防重複寫入（<code>app.ts:57</code>）。登出和改密碼的 token，由 Better Auth 自己驗。</li>
-    <li>測試確認 <code>update-user</code>、<code>sign-up/email</code>、<code>sign-in/email</code> 回 404（<code>test/m0-http.test.ts</code> 的「登入檢查」段）。</li>
-    <li><code>/sign-up/email</code> 同時被 <code>disabledPaths</code>（<code>auth.ts:46</code>）和白名單擋，白名單先擋。</li>
-    <li>登出後，原來的 token 打需要登入的路徑回 401（<code>test/m0-db.test.ts</code>）。</li>
-    <li>同一個前綴下，M2 的註冊路由掛在 <code>authRoutes</code> 前面（<code>app.ts:53</code>），屬於 Account。</li>
-  </ul></div>
-  <div class="b w"><h3>為什麼這樣做</h3><ul>
-    <li><b>用白名單，不用 <code>disabledPaths</code> 一條條關：</b>Better Auth 新版多出來的路徑會自動開放，白名單比較安全（ADR-0107）。</li>
-    <li><b>不整個處理器直接掛上去：</b><code>update-user</code> 能改名稱，錯誤格式也不一致（ADR-0107）。</li>
-    <li><b>不過登入檢查：</b>登入時還沒有 token（ADR-0107）。</li>
-    <li><b>不帶 <code>Idempotency-Key</code>：</b>防重複寫入的紀錄是「某個人加某把 key」，要支援就得多一張沒有擁有者的表。登出第二次沒有 session 可刪，改密碼第二次因為舊密碼已不對而被拒，結果和 PRD-001 §10 要的一樣（ADR-0957）。</li>
-  </ul></div>
-</div>
-
+<h2 id="shared" data-focus="store.ts:42-60,126-130">5 共用內容與個人活動</h2>
+<p class="lead">同一個外出活動只存一份共用內容，個人的東西存在自己那一列。</p>
 <figure>
 <div class="scroll">
-<svg viewBox="0 0 800 250" role="img" aria-label="請求進到 /api/auth 後，先比對白名單，再交給 Better Auth，成功就原樣回，失敗就轉換">
-  <rect class="box bx-blue" x="30" y="10" width="400" height="44" rx="6"/>
-  <text data-ref="auth.ts:73-77" x="230" y="37" class="mid">方法＋路徑在 OPEN 清單裡？</text>
-  <path class="arw-r" marker-end="url(#ar)" d="M430 32H500"/>
-  <text class="lab mid" x="465" y="26">否</text>
-  <rect class="box bx-rust" x="500" y="12" width="270" height="40" rx="6"/>
-  <text x="635" y="37" class="mid r">404 NOT_FOUND</text>
-  <path class="arw" marker-end="url(#a)" d="M230 54V72"/>
-  <text class="lab" x="238" y="68">是</text>
+<svg viewBox="0 0 800 360" role="img" aria-label="共用的 activities 和個人的 user_activities 兩張表的關係，以及清理函式">
+  <rect class="box bx-gold" x="40" y="30" width="300" height="190" rx="6"/>
+  <text data-ref="006_m5.sql:10-18" class="t" x="56" y="56">activities</text>
+  <text class="s" x="56" y="76">共用，沒有 RLS；外出活動</text>
+  <text class="m" x="56" y="104">id  kind  bucket  content</text>
+  <text class="s" x="56" y="132">content 是拿掉距離和降雨的活動</text>
+  <text class="s" x="56" y="152">app 帳號只能讀和新增</text>
+  <text class="s" x="56" y="172">存進去就不再改</text>
 
-  <rect class="box bx-blue" x="30" y="72" width="400" height="44" rx="6"/>
-  <text data-ref="auth.ts:79" x="230" y="99" class="mid">交給 Better Auth 的 auth.handler</text>
-  <path class="arw" marker-end="url(#a)" d="M230 116V134"/>
+  <rect class="box bx-blue" x="460" y="30" width="300" height="190" rx="6"/>
+  <text data-ref="006_m5.sql:23-46" class="t" x="476" y="56">user_activities</text>
+  <text class="s" x="476" y="76">每個人自己的，開 RLS</text>
+  <text class="m" x="476" y="104">activity_id  → activities</text>
+  <text class="m" x="476" y="124">home_content（在家活動）</text>
+  <text class="s" x="476" y="148">兩個欄位剛好一個有值</text>
+  <text class="m" x="476" y="170">status  day  start_at  end_at</text>
+  <text class="m" x="476" y="190">distance_m  note  card_id</text>
 
-  <rect class="box bx-blue" x="30" y="134" width="400" height="44" rx="6"/>
-  <text data-ref="auth.ts:80" x="230" y="161" class="mid">回應成功（res.ok）？</text>
-  <path class="arw-t" marker-end="url(#at)" d="M430 156H500"/>
-  <text class="lab mid" x="465" y="150">是</text>
-  <rect class="box bx-teal" x="500" y="136" width="270" height="40" rx="6"/>
-  <text x="635" y="161" class="mid tl">原樣回給 PWA</text>
-  <path class="arw" marker-end="url(#a)" d="M230 178V196"/>
-  <text class="lab" x="238" y="192">否</text>
+  <path class="arw" marker-end="url(#a)" d="M460 100H340"/>
+  <text class="lab mid" x="400" y="92">外出</text>
 
-  <rect class="box bx-blue" x="30" y="196" width="400" height="44" rx="6"/>
-  <text data-ref="auth.ts:81" x="230" y="223" class="mid">authError 轉成 AppError，throw 出去</text>
-  <path class="arw" marker-end="url(#a)" d="M430 218H500"/>
-  <rect class="box bx-gray" x="500" y="198" width="270" height="40" rx="6"/>
-  <text x="635" y="223" class="mid">app.onError 回統一格式</text>
+  <rect class="box bx-gray" x="40" y="270" width="300" height="70" rx="6"/>
+  <text data-ref="006_m5.sql:51-71" class="t" x="56" y="298">m5_cleanup_unused_activities()</text>
+  <text class="s" x="56" y="320">每日排程呼叫，擁有者權限</text>
+  <path class="arw" marker-end="url(#a)" d="M190 270V220"/>
+  <text class="lab" x="198" y="250">沒人指著才刪</text>
 </svg>
 </div>
-<figcaption>白名單是 <code>POST /sign-in/username</code>、<code>POST /sign-out</code>、<code>POST /change-password</code>（<code>auth.ts:73</code>）。藍色是這個檔案做的判斷，紅色是被擋掉的結果。最後一格由請求管線處理。</figcaption>
+<figcaption>外出活動用 <code>activity_id</code> 指向共用的那一列，在家活動的內容在自己的 <code>home_content</code>。</figcaption>
 </figure>
+<div class="parts tight">
+  <div class="b p"><h3>問題</h3><p>同一個活動只存一份，但不能存成兩筆，共用的那份也不能帶某個人的資料（PRD-001 §9.2）。</p></div>
+  <div class="b m"><h3>做法</h3><p>外出活動先鎖 <code>bucket</code> 再找同一個，沒有才新增；在家活動存在自己那一列（<code>store.ts:45-60</code>）。</p></div>
+  <div class="b w"><h3>為什麼</h3><p>共用的那份拿掉距離和降雨機率，因為放著等於把位置線索給了別人（ADR-0600）。</p></div>
+</div>
+<details class="more"><summary>細節：3 點結果、4 個原因</summary><div class="in">
+<h4>結果</h4><ul>
+  <li>同一個活動：M4 的認法加名稱整理後一樣；名稱寫法不同就各存一份（<code>rules.ts:94-100</code>）。</li>
+  <li>第二個人看到的是第一個人存的名稱（<code>routes.ts:97</code>）。</li>
+  <li>刪帳號時個人活動跟著刪，共用內容等清理（<code>006_m5.sql:25</code>）。</li>
+</ul>
+<h4>原因</h4><ul>
+  <li><b>名稱也要一樣：</b>地點類 key 只有日期，隔壁的館會被當成同一個（ADR-0951）。</li>
+  <li><b>不用唯一索引：</b>「50 公尺內」不是相等，索引做不到（ADR-0601）。</li>
+  <li><b>在家活動不共用：</b>共用表沒有 RLS，別人查得到記憶片段（ADR-0952）。</li>
+  <li><b>清理用擁有者權限：</b>app 帳號看不到別人的列，會以為都沒人用（ADR-0607）。</li>
+</ul>
+</div></details>
 
-<h3>三條開放的路徑</h3>
+<h2 id="list" data-focus="store.ts:75-124">6 活動清單</h2>
+<p class="lead">一次拿到即將到來、待回報、過去三段，每筆帶狀態和按鈕。</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 330" role="img" aria-label="活動清單：listOf 一次查詢這個人的活動，用同一個 now 對每一筆算 itemOf，再依狀態分成即將到來、待回報、過去三段">
+  <rect class="box bx-blue" x="20" y="124" width="210" height="88" rx="6"/>
+  <text data-ref="store.ts:100-124" class="t" x="34" y="148">listOf 一次查詢</text>
+  <text class="s" x="34" y="170">個人活動 left join 共用內容</text>
+  <text class="m" x="34" y="194">store.ts:102-110</text>
+
+  <path class="arw" marker-end="url(#a)" d="M230 168H270"/>
+
+  <rect class="box bx-blue" x="270" y="124" width="190" height="88" rx="6"/>
+  <text data-ref="store.ts:79-96" class="t" x="284" y="148">itemOf 算每一筆</text>
+  <text class="s" x="284" y="170">同一個 now：狀態、actions</text>
+  <text class="s" x="284" y="192">時間 HH:MM，午夜寫 24:00</text>
+
+  <path class="arw" marker-end="url(#a)" d="M460 168H520"/>
+  <path class="arw" marker-end="url(#a)" d="M490 168V68H520"/>
+  <path class="arw" marker-end="url(#a)" d="M490 168V268H520"/>
+
+  <rect class="box bx-blue" x="520" y="30" width="260" height="76" rx="6"/>
+  <text class="t" x="536" y="54">upcoming 即將到來</text>
+  <text class="m" x="536" y="74">scheduled、in_progress</text>
+  <text class="s" x="536" y="94">照開始時間，SQL 已經排好</text>
+
+  <rect class="box bx-gold" x="520" y="130" width="260" height="76" rx="6"/>
+  <text class="t" x="536" y="154">pendingReport 待回報</text>
+  <text class="m" x="536" y="174">pending_report</text>
+  <text class="s" x="536" y="194">結束時間，早的在上</text>
+
+  <rect class="box bx-gray" x="520" y="230" width="260" height="76" rx="6"/>
+  <text class="t" x="536" y="254">past 過去</text>
+  <text class="m" x="536" y="274">completed、not_done、unreported</text>
+  <text class="s" x="536" y="294">結束時間，新的在上，不分頁</text>
+</svg>
+</div>
+<figcaption>同一個 <code>now</code> 算出每一筆的狀態，再照狀態分到三段。</figcaption>
+</figure>
+<div class="parts tight">
+  <div class="b p"><h3>問題</h3><p>首頁和活動清單要拿到每筆現在的狀態、能按的按鈕，並分成三段排好（TS-006 §4.1）。</p></div>
+  <div class="b m"><h3>做法</h3><p><code>listOf</code> 一次查詢，用同一個現在時間對每一筆算 <code>itemOf</code>，再分三段排序（<code>store.ts:100-124</code>）。</p></div>
+  <div class="b w"><h3>為什麼</h3><p>每筆帶 <code>actions</code>：PWA 只能用手機時鐘，不能自己判斷（ADR-0605）。</p></div>
+</div>
+<details class="more"><summary>細節：3 點結果、3 個原因、1 張表</summary><div class="in">
 <div class="tbl"><table>
-  <tr><th>路徑</th><th>做什麼</th><th>測試怎麼呼叫</th></tr>
-  <tr><td><code>POST /api/auth/sign-in/username</code></td><td>登入，回 token</td><td>不帶 token（<code>test/m0-db.test.ts</code>）</td></tr>
-  <tr><td><code>POST /api/auth/sign-out</code></td><td>登出</td><td>帶 <code>Authorization: Bearer</code></td></tr>
-  <tr><td><code>POST /api/auth/change-password</code></td><td>改密碼，body 有 <code>currentPassword</code> 和 <code>newPassword</code></td><td>帶 <code>Authorization: Bearer</code></td></tr>
+<tr><th>段</th><th>排序</th></tr>
+<tr><td><code>upcoming</code></td><td>開始時間（SQL 排好）</td></tr>
+<tr><td><code>pendingReport</code></td><td>結束時間，早的在上</td></tr>
+<tr><td><code>past</code></td><td>結束時間，新的在上</td></tr>
 </table></div>
-
-<h2 id="errors" data-focus="auth.ts:84-104">3 錯誤轉換</h2>
-<div class="parts">
-  <div class="b p"><h3>要解決的問題</h3><p>Better Auth 回的錯誤不是我們的格式（TS-001 §5.6），PWA 無法統一處理。登入失敗時，也不能讓人從訊息分辨是使用者名稱不存在還是密碼錯（TS-003 §5.3）。</p></div>
-  <div class="b m"><h3>怎麼做</h3><p><code>authRoutes</code> 拿到 Better Auth 的回應後，成功就原樣回（<code>auth.ts:80</code>），失敗就交給 <code>authError</code>（<code>auth.ts:85-104</code>）。它讀回應 body 裡的 <code>code</code>，再依下圖的順序判斷，第一個符合的就用。結果是 <code>AppError</code>，丟出去之後由請求管線轉成統一的錯誤格式。</p><h4>這樣做的結果</h4><ul>
-    <li>登入路徑上，狀態碼小於 500 的失敗（429 除外）都變成同一句 401「使用者名稱或密碼不對」，包括 400（<code>auth.ts:95</code>）。名稱不存在和密碼錯的回應完全一樣（<code>test/m0-db.test.ts</code>）。</li>
-    <li>429 先判斷，所以被擋的那次就算密碼正確，也是 <code>RATE_LIMITED</code>（<code>test/m2-account.test.ts</code> 的擋猜密碼段）。</li>
-    <li><code>INVALID_PASSWORD</code> 的判斷不看路徑（<code>auth.ts:96</code>）。</li>
-    <li>Better Auth 的回應 body 讀不出 JSON 時，當成沒有 <code>code</code>（<code>auth.ts:86</code>）。</li>
-    <li>狀態碼 500 以上變成 <code>INTERNAL</code>，<code>console.error</code> 只印狀態碼和 <code>body.code</code>（<code>auth.ts:102-103</code>）。</li>
-  </ul></div>
-  <div class="b w"><h3>為什麼這樣做</h3><ul>
-    <li><b>登入失敗用同一句：</b>TS-003 §5.3、ADR-0107（<code>auth.ts:94</code>）。</li>
-    <li><b>改密碼時目前密碼不對，放在 <code>fields.currentPassword</code>：</b>讓畫面在那一格下面顯示訊息（<code>docs/api/README.md</code> 的 <code>fields</code> 說明、<code>auth.ts:96-97</code>）。</li>
-    <li><b>429 變成 <code>RATE_LIMITED</code> 加 <code>retryAfterSec</code>：</b>ADR-0107、ADR-0303。</li>
-    <li><b>其他 401、403、4xx 照狀態碼對應：</b>ADR-0107。</li>
-    <li><b>log 只記代碼，不記 body：</b>程式註解只寫做法，文件沒寫理由（<code>auth.ts:102</code>）。</li>
-  </ul></div>
-</div>
-
-<figure>
-<div class="scroll">
-<svg viewBox="0 0 800 490" role="img" aria-label="authError 的判斷順序，每一條判斷對應一個 AppError 代碼">
-  <rect class="box bx-blue" x="20" y="16" width="370" height="50" rx="6"/>
-  <text data-ref="auth.ts:88-92" x="205" y="46" class="mid">狀態碼是 429？</text>
-  <path class="arw" marker-end="url(#a)" d="M390 41H450"/>
-  <text class="lab mid" x="420" y="34">是</text>
-  <rect class="box bx-rust" x="450" y="16" width="330" height="50" rx="6"/>
-  <text class="t mid r" x="615" y="38">RATE_LIMITED + retryAfterSec</text>
-  <text class="s mid" x="615" y="57">X-Retry-After 標頭的秒數，沒有就 60</text>
-  <path class="arw" marker-end="url(#a)" d="M205 66V84"/>
-  <text class="lab" x="213" y="80">否</text>
-
-  <rect class="box bx-blue" x="20" y="84" width="370" height="50" rx="6"/>
-  <text data-ref="auth.ts:95" x="205" y="114" class="mid">路徑是 /sign-in/username，且狀態碼小於 500？</text>
-  <path class="arw" marker-end="url(#a)" d="M390 109H450"/>
-  <text class="lab mid" x="420" y="102">是</text>
-  <rect class="box bx-rust" x="450" y="84" width="330" height="50" rx="6"/>
-  <text class="t mid r" x="615" y="106">UNAUTHORIZED</text>
-  <text class="s mid" x="615" y="125">「使用者名稱或密碼不對」</text>
-  <path class="arw" marker-end="url(#a)" d="M205 134V152"/>
-  <text class="lab" x="213" y="148">否</text>
-
-  <rect class="box bx-blue" x="20" y="152" width="370" height="50" rx="6"/>
-  <text data-ref="auth.ts:96-97" x="205" y="182" class="mid">body.code 是 INVALID_PASSWORD？</text>
-  <path class="arw" marker-end="url(#a)" d="M390 177H450"/>
-  <text class="lab mid" x="420" y="170">是</text>
-  <rect class="box bx-rust" x="450" y="152" width="330" height="50" rx="6"/>
-  <text class="t mid r" x="615" y="174">INVALID_INPUT</text>
-  <text class="s mid" x="615" y="193">「目前的密碼不對」，fields.currentPassword</text>
-  <path class="arw" marker-end="url(#a)" d="M205 202V220"/>
-  <text class="lab" x="213" y="216">否</text>
-
-  <rect class="box bx-blue" x="20" y="220" width="370" height="50" rx="6"/>
-  <text data-ref="auth.ts:98" x="205" y="250" class="mid">狀態碼是 401？</text>
-  <path class="arw" marker-end="url(#a)" d="M390 245H450"/>
-  <text class="lab mid" x="420" y="238">是</text>
-  <rect class="box bx-rust" x="450" y="220" width="330" height="50" rx="6"/>
-  <text x="615" y="250" class="mid r">UNAUTHORIZED</text>
-  <path class="arw" marker-end="url(#a)" d="M205 270V288"/>
-  <text class="lab" x="213" y="284">否</text>
-
-  <rect class="box bx-blue" x="20" y="288" width="370" height="50" rx="6"/>
-  <text data-ref="auth.ts:99" x="205" y="318" class="mid">狀態碼是 403？</text>
-  <path class="arw" marker-end="url(#a)" d="M390 313H450"/>
-  <text class="lab mid" x="420" y="306">是</text>
-  <rect class="box bx-rust" x="450" y="288" width="330" height="50" rx="6"/>
-  <text x="615" y="318" class="mid r">FORBIDDEN</text>
-  <path class="arw" marker-end="url(#a)" d="M205 338V356"/>
-  <text class="lab" x="213" y="352">否</text>
-
-  <rect class="box bx-blue" x="20" y="356" width="370" height="50" rx="6"/>
-  <text data-ref="auth.ts:100" x="205" y="386" class="mid">狀態碼小於 500（其他 4xx）？</text>
-  <path class="arw" marker-end="url(#a)" d="M390 381H450"/>
-  <text class="lab mid" x="420" y="374">是</text>
-  <rect class="box bx-rust" x="450" y="356" width="330" height="50" rx="6"/>
-  <text x="615" y="386" class="mid r">INVALID_INPUT</text>
-  <path class="arw" marker-end="url(#a)" d="M205 406V424"/>
-  <text class="lab" x="213" y="420">否</text>
-
-  <rect class="box bx-gray" x="20" y="424" width="370" height="50" rx="6"/>
-  <text data-ref="auth.ts:102-103" x="205" y="454" class="mid">500 以上</text>
-  <path class="arw" marker-end="url(#a)" d="M390 449H450"/>
-  <rect class="box bx-rust" x="450" y="424" width="330" height="50" rx="6"/>
-  <text class="t mid r" x="615" y="446">INTERNAL</text>
-  <text class="s mid" x="615" y="465">console.error 只印狀態碼和 code</text>
-</svg>
-</div>
-<figcaption>判斷順序在 <code>auth.ts:85-104</code>，點方框可以看對應的行。左邊是判斷，右邊是丟出的 <code>AppError</code> 代碼。</figcaption>
-</figure>
-
-<h2 id="rate" data-focus="auth.ts:59-67">4 擋猜密碼</h2>
-<div class="parts">
-  <div class="b p"><h3>要解決的問題</h3><p>登入只靠使用者名稱加密碼。同一個來源如果能短時間內一直試，就能猜密碼。同一個來源試太多次，要暫時擋下來（TS-003 §5.3）。</p></div>
-  <div class="b m"><h3>怎麼做</h3><p>用 Better Auth 內建的 <code>rateLimit</code>，明寫 <code>enabled: true</code>，登入路徑 <code>/sign-in/username</code> 設成 60 秒內最多 10 次（<code>auth.ts:67</code>）。來源用 <code>cf-connecting-ip</code> 標頭認（<code>auth.ts:59-60</code>）。超過時 Better Auth 回 429，第 3 段把它轉成 <code>RATE_LIMITED</code>。其他路徑用 Better Auth 的預設值，例如改密碼每 10 秒 3 次（<code>auth.ts:65</code>）。</p><h4>這樣做的結果</h4><ul>
-    <li>同一個 IP 在一分鐘內第 11 次登入回 429，別的 IP 不受影響（<code>test/m2-account.test.ts</code> 的擋猜密碼段）。</li>
-    <li>計數存在伺服器記憶體，重開就歸零（<code>auth.ts:66</code>）。</li>
-    <li>讀不到 IP 時，所有人共用一個計數（<code>auth.ts:64</code>）。</li>
-    <li>一個家庭或據點共用一個 IP 時，一分鐘內合計 10 次（ADR-0303）。</li>
-    <li>註冊的次數限制不在這裡，屬於 Account（ADR-0950）。</li>
-  </ul></div>
-  <div class="b w"><h3>為什麼這樣做</h3><ul>
-    <li><b>明寫 <code>enabled</code>：</b>Better Auth 預設只在 production 開，開發和測試也要擋，測試才驗得到（<code>auth.ts:64</code>、ADR-0303）。</li>
-    <li><b>依 IP 擋，不依帳號擋：</b>依帳號的話，別人可以故意打錯把你鎖住（ADR-0303）。</li>
-    <li><b>計數放記憶體：</b><code>storage: 'database'</code> 要多一張表，20 人、一台伺服器用不到（ADR-0303、<code>auth.ts:66</code>）。</li>
-    <li><b>每分鐘 10 次這個數字：</b>文件沒寫理由，TS-003 §7 只把它列為 v0 想法。</li>
-  </ul></div>
-</div>
-
-<h2 id="tables" data-focus="001_m0.sql:4-59">5 帳號資料表</h2>
-<div class="parts">
-  <div class="b p"><h3>要解決的問題</h3><p>Better Auth 要存帳號、密碼和登入狀態。使用者要求刪除帳號時，這個人的資料要一起刪（PRD-001 §9.2）。</p></div>
-  <div class="b m"><h3>怎麼做</h3><p><code>001_m0.sql:10-59</code> 建 <code>users</code>、<code>sessions</code>、<code>accounts</code>、<code>verifications</code> 四張表。內容是用 Better Auth 1.7 的 <code>getMigrations</code> 照 <code>auth.ts</code> 的設定產生一次，貼進我們的 migration（<code>001_m0.sql:5-6</code>）。<code>sessions</code> 和 <code>accounts</code> 的 <code>userId</code> 都是外鍵，設了 <code>on delete cascade</code>，意思是 <code>users</code> 那一列被刪，這兩張表的對應列跟著刪（<code>001_m0.sql:29</code>、<code>001_m0.sql:36</code>）。</p><h4>這樣做的結果</h4><ul>
-    <li>密碼的雜湊值（把密碼轉成無法還原的字串）放在 <code>accounts.password</code>，團隊重設指令找的是 <code>providerId = 'credential'</code> 的那一列（<code>reset-password.ts:39-41</code>）。</li>
-    <li>每支手機的登入狀態是 <code>sessions</code> 的一列，<code>token</code> 欄不能重複（<code>001_m0.sql:24</code>）。團隊重設指令用刪掉這個人的 <code>sessions</code> 列來登出所有手機（<code>reset-password.ts:44</code>）。</li>
-    <li>這四張表不開 RLS（資料庫依登入者限制能看到哪些列的機制），Better Auth 用自己的連線池讀寫，不經過 <code>forUser</code>（<code>001_m0.sql:7</code>）。</li>
-    <li>刪 <code>users</code> 一列，私人資料表也跟著刪，因為每張都有 <code>references users (id) on delete cascade</code>（<code>001_m0.sql:8</code>）。</li>
-  </ul></div>
-  <div class="b w"><h3>為什麼這樣做</h3><ul>
-    <li><b>表由我們的 migration 建，不用 Better Auth 自己的 <code>migrate</code>：</b><code>app</code> 帳號不能建表（<code>001_m0.sql:7</code>、ADR-0106）。</li>
-    <li><b>欄位維持 camelCase：</b>改成 snake_case 的話，每個欄位都要在設定裡對應一次，容易漏；我們自己的表只參照 <code>users.id</code>（ADR-0106）。</li>
-    <li><b>id 用 uuid：</b>文件沒寫理由，TS-003 §7 與 ADR-0106 只寫了這個決定。</li>
-    <li><b>不開 RLS：</b>這四張表由 Better Auth 管（<code>001_m0.sql:7</code>）。</li>
-  </ul></div>
-</div>
-
-<figure>
-<div class="scroll">
-<svg viewBox="0 0 800 270" role="img" aria-label="users 是帳號的主表，sessions 和 accounts 以 userId 指向它，私人資料表也指向它，verifications 沒有 userId">
-  <rect class="box bx-blue" x="40" y="60" width="190" height="96" rx="6"/>
-  <text class="t mid" x="135" y="88">users</text>
-  <text class="s mid" x="135" y="110">id 是 uuid</text>
-  <text class="s mid" x="135" y="130">username 不能重複</text>
-
-  <rect class="box bx-teal" x="340" y="20" width="230" height="56" rx="6"/>
-  <text class="t mid" x="455" y="44">sessions</text>
-  <text class="s mid" x="455" y="63">token 不能重複，expiresAt</text>
-
-  <rect class="box bx-teal" x="340" y="100" width="230" height="56" rx="6"/>
-  <text class="t mid" x="455" y="124">accounts</text>
-  <text class="s mid" x="455" y="143">providerId、password</text>
-
-  <rect class="box bx-none" x="340" y="180" width="230" height="56" rx="6"/>
-  <text class="t mid" x="455" y="204">verifications</text>
-  <text class="s mid" x="455" y="223">沒有 userId 欄位</text>
-
-  <rect class="box bx-gray" x="40" y="196" width="190" height="56" rx="6"/>
-  <text class="t mid" x="135" y="220">其他私人資料表</text>
-  <text class="s mid" x="135" y="239">profiles、events 等</text>
-
-  <path class="arw" marker-end="url(#a)" d="M230 90H285V48H340"/>
-  <text class="lab mid" x="314" y="42">userId</text>
-  <path class="arw" marker-end="url(#a)" d="M230 128H340"/>
-  <text class="lab mid" x="285" y="121">userId</text>
-  <path class="arw" marker-end="url(#a)" d="M135 156V196"/>
-  <text class="lab" x="145" y="181">user_id</text>
-</svg>
-</div>
-<figcaption>箭頭從 <code>users</code> 指向參照它的表，三條都是 <code>on delete cascade</code>。<code>users</code>、<code>sessions</code>、<code>accounts</code>、<code>verifications</code> 的定義在 <code>001_m0.sql:10-59</code>，<code>profiles</code> 在 <code>003_m2.sql:6</code>。</figcaption>
-</figure>
-
-<h2 id="reset" data-focus="reset-password.ts:14-104">6 團隊重設密碼</h2>
-<div class="parts">
-  <div class="b p"><h3>要解決的問題</h3><p>帳號沒有真的 email，App 內也沒有自助重設密碼（TS-003 §1）。忘記密碼的人要寫信給團隊，團隊確認是本人後給一組臨時密碼。來要密碼的原因也可能是手機被別人拿走，所以重設時要把這個人所有手機都登出（TS-003 §5.4）。</p></div>
-  <div class="b m"><h3>怎麼做</h3><p>團隊在自己的電腦上跑 <code>bun run admin:reset-password &lt;使用者名稱&gt;</code>（<code>reset-password.ts:1-6</code>），經 SSH 通道連到資料庫，連線網址放在 <code>MIGRATION_DATABASE_URL</code>。指令先印出連的資料庫（<code>reset-password.ts:97-98</code>），再印使用者名稱、顯示名稱、小學名稱，問一次要不要重設。只有輸入 <code>y</code> 才重設（<code>reset-password.ts:77</code>）。重設時產生 12 字的隨機臨時密碼，換掉密碼、刪光這個人的 session、記一筆事件，三件事放在同一個交易裡。交易是一組資料庫操作，任何一步失敗就整組取消。</p><h4>這樣做的結果</h4><ul>
-    <li>使用者名稱去掉前後空白、轉小寫再查，所以大小寫不影響（<code>reset-password.ts:26</code>，測試用大寫名稱）。</li>
-    <li>輸入去掉前後空白後必須剛好是小寫 <code>y</code>，大寫 <code>Y</code>、其他字或空輸入都不重設（<code>reset-password.ts:77</code>）。</li>
-    <li>帳號沒有小學名稱時，不問、不重設，指令以 1 結束（<code>reset-password.ts:68-72</code>、<code>reset-password.ts:103</code>）。</li>
-    <li><code>accounts</code> 裡 <code>credential</code> 那一列不是剛好 1 列時，丟出一般的 <code>Error</code>，整個交易取消，session 不會被刪。<code>run</code> 沒有接住這個 Error（<code>reset-password.ts:42</code>、<code>reset-password.ts:52-86</code>）。</li>
-    <li>事件只記 <code>password_reset_by_team</code>，props 是空的，不含臨時密碼和小學名稱（<code>test/m2-reset-password.test.ts</code>）。</li>
-    <li>臨時密碼只印在團隊的終端機畫面，小學名稱也會留在那個畫面上（ADR-0309）。</li>
-    <li>測試確認重設後，舊密碼不能登入，新密碼可以，這個人另一支手機的 token 也失效（<code>test/m2-reset-password.test.ts</code>）。</li>
-  </ul></div>
-  <div class="b w"><h3>為什麼這樣做</h3><ul>
-    <li><b>做成指令，不做成 API：</b>TS-003 §5.4 已決定不做，文件沒寫理由（ADR-0309）。</li>
-    <li><b>用 <code>migrator</code> 連線：</b>小學名稱在 <code>account_recovery</code>，後端的 <code>app</code> 帳號被收回讀取權限，只有表的擁有者 <code>migrator</code> 讀得到（<code>reset-password.ts:4</code>、<code>003_m2.sql:31-32</code>、ADR-0300）。團隊也不該拿後端的帳號做人工處理（ADR-0309）。</li>
-    <li><b>沒有小學名稱就拒絕：</b>使用者名稱和顯示名稱不是祕密，真正用來確認本人的是小學名稱，沒有它團隊可能只對了兩項就按 y（ADR-0958、TS-003 §4.3）。</li>
-    <li><b>用 Better Auth 的 <code>hashPassword</code>：</b><code>auth.ts</code> 沒有自訂雜湊函式，這樣登入時才對得上（<code>reset-password.ts:36</code>）。</li>
-    <li><b>刪光 session：</b>來要密碼的原因也可能是手機被別人拿走（TS-003 §5.4、<code>reset-password.ts:30</code>）。</li>
-    <li><b>不從 <code>m0-foundation</code> 的 index 匯入：</b>那會順便啟動 Better Auth、連 <code>.env</code> 的 <code>DATABASE_URL</code> 檢查表，團隊電腦上用不到（<code>reset-password.ts:11-12</code>）。</li>
-    <li><b>臨時密碼去掉容易看錯的字：</b>0 和 O、1 和 l 和 I 這種，唸給對方聽、對方抄的時候容易看錯（<code>reset-password.ts:14-15</code>）。</li>
-    <li><b>流程抽成 <code>run(db, username, ask, print)</code>：</b>輸入和輸出由外面給，測試才能假裝團隊的輸入（<code>reset-password.ts:51-57</code>、ADR-0309）。</li>
-    <li><b>先印連的是哪個資料庫：</b>免得在開發用的資料庫改了半天（<code>reset-password.ts:96-98</code>）。</li>
-  </ul></div>
-</div>
-
-<figure>
-<div class="scroll">
-<svg viewBox="0 0 800 320" role="img" aria-label="重設密碼指令的流程：找帳號、檢查小學名稱、詢問 y、交易、印臨時密碼">
-  <rect class="box bx-blue" x="30" y="10" width="400" height="44" rx="6"/>
-  <text data-ref="reset-password.ts:58-62" x="230" y="37" class="mid">找得到這個使用者名稱？</text>
-  <path class="arw-r" marker-end="url(#ar)" d="M430 32H500"/>
-  <text class="lab mid" x="465" y="26">否</text>
-  <rect class="box bx-rust" x="500" y="12" width="270" height="40" rx="6"/>
-  <text x="635" y="37" class="mid r">印「找不到」，結束</text>
-  <path class="arw" marker-end="url(#a)" d="M230 54V72"/>
-  <text class="lab" x="238" y="68">是</text>
-
-  <rect class="box bx-blue" x="30" y="72" width="400" height="44" rx="6"/>
-  <text data-ref="reset-password.ts:68-72" x="230" y="99" class="mid">帳號有小學名稱？</text>
-  <path class="arw-r" marker-end="url(#ar)" d="M430 94H500"/>
-  <text class="lab mid" x="465" y="88">否</text>
-  <rect class="box bx-rust" x="500" y="74" width="270" height="40" rx="6"/>
-  <text x="635" y="99" class="mid r">不問，建議重新註冊，結束</text>
-  <path class="arw" marker-end="url(#a)" d="M230 116V134"/>
-  <text class="lab" x="238" y="130">是</text>
-
-  <rect class="box bx-blue" x="30" y="134" width="400" height="44" rx="6"/>
-  <text data-ref="reset-password.ts:77-80" x="230" y="161" class="mid">印出三項後詢問，輸入的是 y？</text>
-  <path class="arw-r" marker-end="url(#ar)" d="M430 156H500"/>
-  <text class="lab mid" x="465" y="150">否</text>
-  <rect class="box bx-rust" x="500" y="136" width="270" height="40" rx="6"/>
-  <text x="635" y="161" class="mid r">印「沒有重設」，結束</text>
-  <path class="arw" marker-end="url(#a)" d="M230 178V196"/>
-  <text class="lab" x="238" y="192">是</text>
-
-  <rect class="box bx-gold" x="30" y="196" width="400" height="44" rx="6"/>
-  <text data-ref="reset-password.ts:38-46" x="230" y="223" class="mid">一個交易：換密碼、刪 sessions、記事件</text>
-  <path class="arw-r" marker-end="url(#ar)" d="M430 218H500"/>
-  <rect class="box bx-rust" x="500" y="194" width="270" height="48" rx="6"/>
-  <text class="t mid r" x="635" y="214">accounts 不是剛好 1 列</text>
-  <text class="s mid" x="635" y="233">交易取消，丟出 Error</text>
-  <path class="arw" marker-end="url(#a)" d="M230 240V258"/>
-  <text class="lab" x="238" y="254">成功</text>
-
-  <rect class="box bx-teal" x="30" y="258" width="400" height="44" rx="6"/>
-  <text data-ref="reset-password.ts:82-85" x="230" y="285" class="mid">印出臨時密碼，結束</text>
-</svg>
-</div>
-<figcaption>流程在 <code>reset-password.ts:52-86</code>，點方框可以看對應的行。紅色是結束或中斷。結束時 <code>run</code> 回 <code>true</code> 或 <code>false</code>，指令的結束碼分別是 0 和 1（<code>reset-password.ts:103</code>）。</figcaption>
-</figure>
+<h4>結果</h4><ul>
+  <li>去不了的排在「過去」，照原本的 <code>end_at</code>，不是按的時間（<code>store.ts:121</code>）。</li>
+  <li>到午夜結束的顯示 <code>24:00</code>，不是隔天 <code>00:00</code>（<code>store.ts:75-76</code>）。</li>
+  <li>「過去」整份一次給，沒有分頁（<code>store.ts:99</code>）。</li>
+</ul>
+<h4>原因</h4><ul>
+  <li><b>「過去」不分頁：</b>試用期一個人頂多幾百筆（ADR-0605）。</li>
+  <li><b>不做單筆 GET：</b>寫入都回最新那一筆，文件沒寫更多理由（ADR-0605）。</li>
+  <li><b>三段和排序：</b>照 TS-006 §4.1 的表。</li>
+</ul>
+</div></details>
 
 <h2 id="spec">和規格不一樣的地方</h2>
-<p>下面兩項，實作和規格的字面不同或規格沒寫到，每一項都有對應的依據。</p>
+<p>這一頁有 6 個地方和規格不一樣。</p>
+<details class="more"><summary>展開：6 個不一樣的地方</summary><div class="in">
+<p>TS-006 §7 是 v0 的想法，規格說可以修改或推翻。</p>
 <div class="tbl"><table>
-  <tr><th>規格寫的</th><th>實際做的</th><th>依據</th></tr>
-  <tr><td>TS-001 §5.7、PRD-001 §10：每個寫入都帶防重複的 key</td><td><code>POST /sign-out</code>、<code>POST /change-password</code> 不帶，靠第二次會被拒</td><td>ADR-0957</td></tr>
-  <tr><td>TS-003 §4.3：三項都對得上才重設，沒有寫帳號沒有小學名稱時怎麼辦</td><td>沒有小學名稱的帳號，指令不問就拒絕，建議重新註冊</td><td>ADR-0958</td></tr>
+<tr><th>規格寫的</th><th>實際做的</th><th>依據</th></tr>
+<tr><td>PRD-001 §9.2：活動只存一份</td><td>只有外出共用；在家各存一份</td><td>ADR-0952</td></tr>
+<tr><td>TS-006 §7：欄位一個一欄</td><td>共用內容一個 <code>jsonb</code>；加 <code>home_content</code></td><td>ADR-0600、ADR-0952</td></tr>
+<tr><td>TS-006 §7：50 公尺內、開始時間一樣</td><td>外出還要名稱一樣；在家不比</td><td>ADR-0951、ADR-0952</td></tr>
+<tr><td>TS-006 §7：鎖使用者那一列</td><td>advisory lock，不鎖 <code>profiles</code></td><td>ADR-0603</td></tr>
+<tr><td>TS-006 §7：「過去」20 筆；存降雨</td><td>「過去」全給；降雨不存</td><td>ADR-0605、ADR-0600</td></tr>
+<tr><td>v0 回報結果用 <code>done</code></td><td>用 <code>completed</code></td><td>ADR-0605</td></tr>
 </table></div>
+</div></details>
 
 <h2 id="adr">決定清單</h2>
-<p>這一段有 8 個 ADR，<b>7 個是 Claude 決定的</b>，1 個是你決定的。</p>
+<p>這一頁有 17 個決定，17 個都是 Claude 決定的。</p>
+<details class="more"><summary>展開：17 個決定</summary><div class="in">
+<p>0601、0951、0952 併在 0600 的檔案，0906 併在 0603；0600、0603、0604、0507、0108 在 <code>docs/adr/</code>，其餘封存。</p>
 <div class="tbl"><table>
-  <tr><th>ADR</th><th>決定了什麼</th><th>放棄的做法</th><th>決定者</th></tr>
-  <tr><td>0002（含 0003、0009）</td><td>登入憑證用 Bearer token；Better Auth 用 <code>pg</code> 連線池連同一個資料庫</td><td>Cookie（前後端要放在同一個主網域下）</td><td>你</td></tr>
-  <tr><td>0106</td><td>Better Auth 的設定：複數表名、uuid、<code>username</code> 加 <code>bearer</code>、關掉公開註冊、session 365 天</td><td>欄位改 snake_case、用 Better Auth 自己的 <code>migrate</code></td><td>Claude</td></tr>
-  <tr><td>0107</td><td><code>/api/auth</code> 只開放三條路徑，錯誤轉成我們的格式</td><td>整個處理器直接掛上去、用 <code>disabledPaths</code> 一條條關</td><td>Claude</td></tr>
-  <tr><td>0303</td><td>登入同一個 IP 每分鐘 10 次，計數存在記憶體</td><td><code>storage: 'database'</code>、依帳號擋</td><td>Claude</td></tr>
-  <tr><td>0957</td><td>登出、改密碼（和註冊）不帶 <code>Idempotency-Key</code></td><td>也收 key，多一張沒有擁有者的表</td><td>Claude</td></tr>
-  <tr><td>0300</td><td><code>account_recovery</code> 對 <code>app</code> 帳號收回讀取權限，重設指令用 <code>migrator</code> 讀</td><td>只靠把小學名稱分開放</td><td>Claude</td></tr>
-  <tr><td>0309</td><td>重設密碼做成團隊電腦上的指令，臨時密碼 12 字，同一個交易</td><td>做成只有團隊能呼叫的 API、用 <code>app</code> 帳號連</td><td>Claude</td></tr>
-  <tr><td>0958</td><td>沒有小學名稱的帳號，重設指令直接拒絕</td><td>照舊印出、只加警告</td><td>Claude</td></tr>
+<tr><th>ADR</th><th>決定了什麼</th><th>放棄的做法</th><th>決定者</th></tr>
+<tr><td>0600</td><td>共用表加個人表；拿掉距離、降雨</td><td>一張表各存一份；照原樣存</td><td>Claude</td></tr>
+<tr><td>0601</td><td>先鎖 <code>bucket</code>，以第一個人為準</td><td>唯一索引加 <code>on conflict</code>；較新就更新</td><td>Claude</td></tr>
+<tr><td>0951</td><td>外出要 M4 認法加名稱一樣</td><td>比網址；不共用；名稱比相似度</td><td>Claude</td></tr>
+<tr><td>0952</td><td>在家存在個人列；名稱 1～40 字</td><td>也共用只加 RLS；太長截斷</td><td>Claude</td></tr>
+<tr><td>0602</td><td>佔用時段跟 M3 出卡算法一樣</td><td>地點類不等開門；秒數照存</td><td>Claude</td></tr>
+<tr><td>0603</td><td>advisory lock 加排除約束；一卡一筆</td><td><code>serializable</code>；只靠排除約束</td><td>Claude</td></tr>
+<tr><td>0906</td><td>鎖裡再問 M3 卡還在不在</td><td>取卡搬進鎖裡；M5 查這輪接受過沒</td><td>Claude</td></tr>
+<tr><td>0604</td><td>待回報、未回報讀取時算；按錯回什麼</td><td>排程改資料；已安排可直接回報</td><td>Claude</td></tr>
+<tr><td>0605</td><td>5 條 API，帶 <code>actions</code>，「過去」不分頁</td><td>寫入回 <code>{ activity }</code>；不給 <code>actions</code></td><td>Claude</td></tr>
+<tr><td>0606</td><td>接受流程；被擋時回傳不丟錯</td><td>卡過期用 <code>CONFLICT</code>；丟錯取消交易</td><td>Claude</td></tr>
+<tr><td>0607</td><td>清理用擁有者函式，先拿同一把鎖</td><td>給 app 看全部的 RLS；改用 migrator</td><td>Claude</td></tr>
+<tr><td>0608</td><td>5 種事件，不記備註、距離、位置、名稱</td><td>未回報也記一筆</td><td>Claude</td></tr>
+<tr><td>0609</td><td>備註 500 字等小數字集中記錄</td><td>放環境變數</td><td>Claude</td></tr>
+<tr><td>0903</td><td>回報、去不了後通知 M3 重新評分</td><td>重置一輪；只標不要；不處理</td><td>Claude</td></tr>
+<tr><td>0307</td><td>重置在交易後，失敗不擋（M2 的）</td><td>回錯誤；放進同一個交易</td><td>Claude</td></tr>
+<tr><td>0507</td><td>key 格式和 50 公尺認法（M4 的）</td><td>比名稱；用原始座標比</td><td>Claude</td></tr>
+<tr><td>0108</td><td>私人表開 RLS，用 <code>forUser</code></td><td>只在程式加 <code>user_id</code>；每人一個帳號</td><td>Claude</td></tr>
 </table></div>
+</div></details>
 
 <h2 id="limits">已知上限</h2>
-<p>這些是刻意的簡化。程式裡標了 <code>ponytail</code>，或寫在 ADR 裡。</p>
+<p>這一頁有 2 個已知上限。</p>
+<details class="more"><summary>展開：2 個上限</summary><div class="in">
+<p>刻意的簡化，程式標了 <code>ponytail</code> 或寫在 ADR。</p>
 <div class="tbl"><table>
-  <tr><th>簡化</th><th>什麼時候會出問題</th><th>到時候怎麼改</th></tr>
-  <tr><td>擋猜密碼的計數存在記憶體（<code>auth.ts:66</code>）</td><td>伺服器重開計數就歸零；有多台伺服器時各算各的</td><td>改成 <code>storage: 'database'</code>，要多一張表</td></tr>
-  <tr><td>靠不開放 <code>update-user</code> 擋改使用者名稱（<code>auth.ts:38-40</code>）</td><td>M2 若在伺服器端呼叫 <code>auth.api.updateUser</code> 改名稱，就擋不住</td><td>設定照開著 <code>immutableUsername</code>，留給以後修好的 Better Auth 版本（ADR-0107）</td></tr>
-  <tr><td>沒有小學名稱的帳號不能用指令重設（ADR-0958）</td><td>半個帳號又忘記密碼時，只能重新註冊；這種帳號只有伺服器在註冊途中當掉才會出現</td><td>還記得密碼時，可以到「我的設定」補上小學名稱，之後指令照常</td></tr>
+<tr><th>簡化</th><th>什麼時候會出問題</th><th>到時候怎麼改</th></tr>
+<tr><td>「過去」不分頁（<code>store.ts:99</code>）</td><td>活動很多、清單太長時</td><td>改 limit 加游標（ADR-0605）</td></tr>
+<tr><td>卡還在不在只看一台的記憶體（ADR-0906）</td><td>要開第二台後端時</td><td>在 M5 交易裡查這輪接受過沒</td></tr>
 </table></div>
+</div></details>

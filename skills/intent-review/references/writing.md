@@ -4,34 +4,52 @@ A page is a reading guide for a person who will judge the code themselves. It sa
 
 You write an HTML fragment. `scripts/build_page.py` checks it, embeds the source files and wraps it in the shell (styles, code pane, scripts). So the fragment has no `<html>`, `<body>`, `<style>` or `<script>`.
 
-`references/example_fragment.html` is a finished fragment from a real project (in Traditional Chinese). Read its first 120 lines for the structure and one of its `<figure>` blocks before drawing a diagram. Copy its class names and depth, not its topics or its language.
+`references/example_fragment.html` is a finished fragment from a real project (in Traditional Chinese). Read its first two topics for the structure and the amount of text, and one of its `<figure>` blocks before drawing a diagram. Copy its class names and depth, not its topics or its language.
 
-## Layout, in this order
+## The form: a picture and a few short lines
+
+Most reviewers read pictures first. A page that retells the code in paragraphs is not read, and the code is right beside the page anyway. So what the reader sees without clicking is, per topic, one sentence, one diagram and three short rows. A little more sits one click away in a fold. Everything else is left out.
 
     <!-- sources: src/auth/session.ts, db/migrations/001.sql -->   paths from the repo root; these files go in the code pane
     <!-- skipped: bun.lock, src/gen/types.ts -->                    diff pages only: changed files you chose not to embed
     <h1>Title</h1>
     <p class="sub">One line that says what the page covers</p>
-    <nav class="toc" aria-label="…"><a href="#overview">…</a> <a href="#topic-id">1 …</a> …</nav>
-    <h2 id="overview">Overview</h2>     one short paragraph, then a table with one row per topic: topic / problem / method / file (add a column when it helps)
+    <nav class="toc" aria-label="…"><a href="#overview">…</a> <a href="#map">…</a> <a href="#topic-id">1 …</a> …</nav>
+    <h2 id="overview">Overview</h2>     at most two sentences; then a fold holding a two-column table (topic / one line)
+    <h2 id="map">Function map</h2>      one sentence, the two-level map, a fold with at most 3 bullets (see "Function map")
     <h2 id="…" data-focus="session.ts:10-40,60-80">1 Topic name</h2>
-    <div class="parts"> … </div>         then the diagrams and tables that belong to this topic
+    …the topic, as below…
     … more topics …
     closing sections (see "Closing sections")
 
 Write headings and text in the project's language. The examples here are in English only to show the shape.
 
-Each topic has exactly one `parts` block, with exactly these three blocks in this order:
+Each topic, in this order, and nothing else visible:
 
-    <div class="parts">
-      <div class="b p"><h3>Problem</h3><p>…</p></div>
-      <div class="b m"><h3>Method</h3><p>…</p><h4>What follows from this</h4><ul><li>…</li></ul></div>
-      <div class="b w"><h3>Why this way</h3><ul><li><b>Short label:</b> reason (ADR-0012, <code>session.ts:12</code>).</li></ul></div>
+    <p class="lead">One sentence, about 20 words at most, saying what this part does. No line refs.</p>
+
+    <figure>…the diagram that shows this topic's mechanism…<figcaption>One sentence.</figcaption></figure>
+
+    <div class="parts tight">
+      <div class="b p"><h3>Problem</h3><p>One sentence: why this code exists.</p></div>
+      <div class="b m"><h3>Method</h3><p>One sentence: what it does (<code>session.ts:12-30</code>).</p></div>
+      <div class="b w"><h3>Why</h3><p>One sentence: the main reason, with its source (ADR-0012).</p></div>
     </div>
 
-- **Problem** says why this code exists, in product or system terms. One or two sentences.
-- **Method** says what the code does, in the order it happens. "What follows from this" is optional: use it for behaviour a reader cannot see from those lines alone (for example "a 400 for bad input is stored as done too"). Present tense only, nothing about the future.
-- **Why this way** gives the reasons, each with its source.
+    <details class="more">
+      <summary>Details: 4 results, 3 reasons</summary>
+      <div class="in">
+        <h4>Results</h4>  <ul><li>…at most 4…</li></ul>
+        <h4>Reasons</h4>  <ul><li><b>Short label:</b> one clause and its source.</li></ul>
+      </div>
+    </details>
+
+- **Every topic has a diagram.** If nothing about the topic can be drawn (a flow with decisions, a state machine, a sequence between actors, a timeline, how tables or types relate), it is probably not a topic.
+- **The three rows are one sentence each**, with at most one source in brackets. The builder requires exactly these three blocks, in this order.
+- **The fold is small: about 150 words at most.** Results are the behaviours a reader could not see from the diagram or guess from the code's shape: surprising cases, what happens on failure. Reasons are the ones beyond the main one, each with its source. One short sentence per bullet, each with one `file:line` ref or source. A small table (at most 5 rows) or a second figure may go in the fold when it shows something the main diagram does not.
+- **The summary line says what is inside, with counts**, so the reader can decide whether to open it.
+- **Leave out** what the code shows plainly at the cited lines and what repeats the diagram. Do not write a full method paragraph: the diagram is the method.
+- A fold is always `<details class="more"><summary>…</summary><div class="in">…</div></details>`, never nested. The topic's diagram and its three rows are never inside a fold.
 
 `data-focus` on the `<h2>` becomes the one "show code" button of the topic: one file and all the lines that belong to the topic. When a topic spans files, use the main file; the others stay reachable through inline refs.
 
@@ -64,7 +82,7 @@ These rules are the reason the page is useful. A reviewer who is handed conclusi
 
 ## Closing sections
 
-Add each one only when there is real content for it, with these as `<h2>` sections with a table:
+Add each one only when there is real content for it. Each is an `<h2>`, one sentence giving the count, and the table inside a fold; keep every row, with cells cut to short phrases:
 
 - **Differences from the spec**: what the spec says / what the code does / the source for the difference. Only real ones you can point at.
 - **Decisions**: the ADRs or recorded decisions that govern this code: decision / what was given up / who decided.
@@ -81,7 +99,7 @@ Add each one only when there is real content for it, with these as `<h2>` sectio
 
 ## Diagrams
 
-Inline SVG, where a picture shows the mechanism better than text: a flow with decisions, a state machine, table relations, a sequence between actors, a timeline. Zero is fine for a small diff; a full page about a subsystem usually wants two to five.
+Inline SVG, where a picture shows the mechanism better than text: a flow with decisions, a state machine, table relations, a sequence between actors, a timeline. Every topic has one, and it is the main thing the reader looks at, so it must be clean: 5 to 8 boxes with short labels, no overlapping text, arrows that end on box edges, nothing crossing.
 
     <figure><div class="scroll"><svg viewBox="0 0 800 H" role="img" aria-label="one sentence">…</svg></div><figcaption>…</figcaption></figure>
 
@@ -105,7 +123,8 @@ How to lay it out so it reads well:
 
 - **One main path.** Find the path the page is about (a request coming in, a job running, a message being handled) and put its functions in one column, top to bottom, with `path=True`. That column is what the reader follows.
 - **Helpers beside their callers.** Put the functions the path calls to the right, at the same height as the caller, in their own file containers. Most arrows then run straight across. Shared helpers that many things call (errors, logging) go in a row along the bottom.
-- **About 20 functions at most.** Only the ones the page's topics talk about. Leave out what is called from everywhere (an error class, a logger) and say in the caption what is left out; an honest gap is better than a full, unreadable picture.
+- **Two levels.** In the page the map shows only the main path: 8 to 10 boxes, no groups, about 10 arrows. The full map (about 20 functions at most) sits behind the figure's button: build both and join them with `fn_map.pair(brief, detail, caption, …)`. Readers found the full map alone too busy to start from.
+- **In the full map, about 20 functions at most.** Only the ones the page's topics talk about. Leave out what is called from everywhere (an error class, a logger) and say in the caption what is left out; an honest gap is better than a full, unreadable picture.
 - **Three kinds of line**: `call` (black) for a direct call, `kind='next'` (green) when control passes on without a direct call (middleware order, a queue, an event), `kind='error'` (red dashed) for what runs when something throws.
 - **No crossings.** Reroute, reorder the boxes, or use the two tools the library gives: a `group` around functions that share callers or callees (one line to the group stands for all of them), and a fork (a second arrow from the same function may start on its first arrow). If it still cannot be drawn without crossings, the map has too much in it.
 - **Functions outside the page** (called by or calling this page's code) go in a `dashed=True` container with no ref.

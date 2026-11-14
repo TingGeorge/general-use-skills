@@ -36,6 +36,7 @@ Lines (points are [(x, y), ...], each step straight across or straight down; the
 legend(x, y, text=None)   text: {'title', 'file', 'path', 'next', 'call', 'error', 'changed'} to translate.
 verify(repo, rev, paths)  checks every `at` against the files at that commit (rev None: the working tree).
 figure(caption, alt='', zoom=True) -> the <figure> html. Raises with the list of problems if the drawing has any.
+pair(brief, detail, caption, alt, open_label, close_label) -> one figure holding two Maps: brief in the page, detail in the window.
 Self-check: fn_map.py --selfcheck
 """
 import html, os, re, subprocess, sys
@@ -250,6 +251,14 @@ class Map:
 
     def figure(self, caption, alt='', zoom=True):
         return f'<figure{" class=\"zoom\"" if zoom else ""}>\n<div class="scroll">\n{self.svg(alt)}\n</div>\n<figcaption>{caption}</figcaption>\n</figure>\n'
+
+
+def pair(brief, detail, caption, alt='', open_label='Show every function', close_label='Close'):
+    """One figure with two maps: `brief` (the main path only, about ten boxes) shows in the page, and `detail`
+    (everything) shows when the reader opens the figure over the window. Most readers want the brief one."""
+    return (f'<figure class="zoom" data-open="{html.escape(open_label)}" data-close="{html.escape(close_label)}">\n'
+            f'<div class="scroll brief">\n{brief.svg(alt)}\n</div>\n<div class="scroll detail">\n{detail.svg(alt)}\n</div>\n'
+            f'<figcaption>{caption}</figcaption>\n</figure>\n')
 
 
 def selfcheck():
