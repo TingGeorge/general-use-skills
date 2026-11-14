@@ -4,7 +4,7 @@ A page is a reading guide for a person who will judge the code themselves. It sa
 
 You write an HTML fragment. `scripts/build_page.py` checks it, embeds the source files and wraps it in the shell (styles, code pane, scripts). So the fragment has no `<html>`, `<body>`, `<style>` or `<script>`.
 
-`references/example_fragment.html` is a finished fragment from a real project (in Traditional Chinese). Read its first two topics for the structure and the amount of text, and one of its `<figure>` blocks before drawing a diagram. Copy its class names and depth, not its topics or its language.
+`references/example_fragment.html` is a finished fragment in English about a made-up table-booking API (its source code is not bundled, so its line references point at nothing here). Its five topics use five kinds of diagram: a flow with decisions, a state machine, a sequence of two requests, a timeline and table relations. Read its first two topics for the structure and the amount of text, and one of its `<figure>` blocks before drawing a diagram. Copy its class names and depth, not its topics or its language.
 
 ## The form: a picture and a few short lines
 
