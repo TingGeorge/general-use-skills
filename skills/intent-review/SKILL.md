@@ -44,7 +44,7 @@ Read `references/writing.md` first; it has the fragment layout, the content rule
 
 1. Read the code of the page completely, the tests that exercise it, and the documents found in step 1.
 2. Choose the topics from how the code is organised around purposes.
-3. Write the fragment to a scratch file (not into the repo). A page about code starts with a function map, and a page about a database schema with an ER diagram; both are drawn by scripts in this skill (see `references/writing.md`).
+3. Write the fragment to a scratch file (not into the repo). A page about a database schema starts with an ER diagram, and a page about code with a function map (on a module page, after a small figure of the module's file layout). A page that covers both puts the database half first. The ER diagram and the function map are drawn by scripts in this skill (see `references/writing.md`).
 4. Build it:
 
        python3 -I <skill>/scripts/build_page.py <fragment> --out <repo>/<folder>/<Page>.html --repo <repo> [--rev REV] [--base BASE] --lang <zh-TW|en>
@@ -64,6 +64,8 @@ The user will hold every sentence against the code, so check the pages the same 
 
 Show each page the way this environment shows artifacts (publish it as a private artifact, or follow the user's own rule for where artifacts go). When a page is rebuilt later, update the same artifact so its link stays the same.
 
+Several pages of one review (for example a module's database page and its code page) go under one link: publish the first page as the artifact and the others through the Artifact tool's `files`, and put a link to the other pages near the top of each page's overview (relative `href`, e.g. `Code.html`). A page in `files` is served without the document skeleton, so start its built file with `<!doctype html>`, a charset meta and a viewport meta.
+
 Tell the user, briefly: the pages and their reading order, what each covers, every place where a reason was not documented, and anything you could not determine. Do not add your opinion of the code.
 
 ## 6. While the user reviews
@@ -78,7 +80,7 @@ The user reads and asks, in chat or in comments on the page. Your part:
 ## Files in this skill
 
 - `scripts/build_page.py`: checks a fragment and builds the page. `--selfcheck` runs its own test.
-- `scripts/fn_map.py`: a small library for the function map each code page starts with (files, functions, calls); it refuses crossing lines and arrows not backed by a line of code (see "Function map" in `references/writing.md`). `--selfcheck` runs its own test.
+- `scripts/fn_map.py`: a small library for the function map each code page starts with (files, functions, calls, and file colour bars for the design-layout view); it refuses crossing lines and arrows not backed by a line of code (see "Function map" in `references/writing.md`). `--selfcheck` runs its own test.
 - `scripts/er_diagram.py`: draws the ER diagram for a page about a database schema from a JSON spec (see "ER diagram" in `references/writing.md`). `--selfcheck` runs its own test.
 - `assets/shell.html`: styles, the code pane (dark, wrap toggle, adjustable width, diff marks), the open-in-window button for `figure.zoom`, and its script. Highlighting follows the file extension. Change the look here, then rebuild pages.
 - `references/writing.md`: how to write a fragment. Read before writing; give its path to page-writing subagents.

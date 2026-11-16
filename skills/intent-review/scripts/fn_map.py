@@ -34,6 +34,10 @@ Lines (points are [(x, y), ...], each step straight across or straight down; the
   A second arrow from the same src may start on the first one instead of on the box (a fork).
   src or dst may also be a file name (the line stops at the container's edge).
 legend(x, y, text=None)   text: {'title', 'file', 'path', 'next', 'call', 'error', 'changed'} to translate.
+mark_files(marks, x, y)   marks: [(path, colour, label), ...]. Each function whose ref's file part is exactly `path`
+        gets a bar of that colour on its left edge (right of the green bar on a changed box), and a row of legend
+        entries starts at (x, y). For a map whose containers are not files, e.g. the design-layout view:
+        m.mark_files([('src/friends/index.ts', 'var(--teal)', 'index.ts'), ('store.ts', 'var(--gold)', 'store.ts')], 20, 685)
 verify(repo, rev, paths)  checks every `at` against the files at that commit (rev None: the working tree).
 figure(caption, alt='', zoom=True) -> the <figure> html. Raises with the list of problems if the drawing has any.
 pair(brief, detail, caption, alt, open_label, close_label) -> one figure holding two Maps: brief in the page, detail in the window.
@@ -43,6 +47,7 @@ import html, os, re, subprocess, sys
 
 BH = 34
 wide = lambda s, px=7.9: sum(13 if ord(c) > 0x2e7f else px for c in s)
+file_of = lambda fn: (fn['ref'] or '').split(':')[0]
 LEGEND = {'title': 'How to read this', 'file': 'A grey container is a file; the boxes in it are functions',
           'path': 'Blue box: on the path one request takes', 'next': 'Green: this step is done, on to the next',
           'call': 'Black: this function calls that one', 'error': 'Red dashed: runs when something throws',
@@ -54,6 +59,7 @@ class Map:
         self.W, self.H = width, height
         self.files, self.fns, self.groups, self.lines, self.labels, self.extra = {}, {}, {}, [], [], []
         self.problems, self.verified = [], False
+        self.marks = []
 
     # ---- boxes ----
     def file(self, name, x, y, w, h, ref=None, dashed=False, label_right=False):
@@ -107,6 +113,13 @@ class Map:
             o.append(f'<text class="s" x="{x + 72}" y="{y0 + 4}">{html.escape(t[r])}</text>')
         self.extra += o
 
+    def mark_files(self, marks, x, y):
+        self.marks += marks
+        for path, colour, label in marks:
+            self.extra.append(f'<path style="stroke:{colour};stroke-width:5;fill:none" d="M{x} {y - 11}V{y + 3}"/>')
+            self.note(label, x + 10, y)
+            x += max(230, int(wide(label, 7)) + 40)
+
     # ---- checks ----
     def _rect(self, name):
         b = self.fns.get(name) or self.groups.get(name) or self.files.get(name)
@@ -119,6 +132,9 @@ class Map:
 
     def _check(self):
         P = list(self.problems)
+        for path, _, _ in self.marks:
+            if not any(file_of(f) == path for f in self.fns.values()):
+                P.append(f'mark_files: no function has a ref in "{path}"')
         segs = []  # (line index, (x1, y1, x2, y2) with x1<=x2, y1<=y2)
         on_edge = lambda p, r: (r[0] <= p[0] <= r[2] and r[1] <= p[1] <= r[3]) and (p[0] in (r[0], r[2]) or p[1] in (r[1], r[3]))
         for i, l in enumerate(self.lines):
@@ -241,6 +257,10 @@ class Map:
             o.append(f'<text{attr} class="m mid" style="fill:var(--fg);font-size:13px" x="{f["x"] + f["w"] / 2}" y="{f["y"] + 22}">{html.escape(n)}</text>')
             if f['changed']:
                 o.append(f'<path style="stroke:#2E9E4F;stroke-width:4;fill:none" d="M{f["x"] + 2} {f["y"] + 3}V{f["y"] + BH - 3}"/>')
+            bar_x = f['x'] + (9 if f['changed'] else 3)
+            for path, colour, _ in self.marks:
+                if file_of(f) == path:
+                    o.append(f'<path style="stroke:{colour};stroke-width:5;fill:none" d="M{bar_x} {f["y"] + 3}V{f["y"] + BH - 3}"/>')
         for l in self.lines:
             cls, mk = {'call': ('arw', 'a'), 'next': ('arw-t', 'at'), 'error': ('arw-r', 'ar')}[l['kind']]
             d = 'M' + 'L'.join(f'{x} {y}' for x, y in l['pts'])
@@ -254,8 +274,9 @@ class Map:
 
 
 def pair(brief, detail, caption, alt='', open_label='Show every function', close_label='Close'):
-    """One figure with two maps: `brief` (the main path only, about ten boxes) shows in the page, and `detail`
-    (everything) shows when the reader opens the figure over the window. Most readers want the brief one."""
+    """One figure with two maps: `brief` shows in the page, `detail` when the reader opens the figure over the
+    window. Without a design diagram: brief = the main path (8 to 10 boxes), detail = every function by file.
+    With one: brief = every function by file, detail = the same functions in the design's groups (mark_files)."""
     return (f'<figure class="zoom" data-open="{html.escape(open_label)}" data-close="{html.escape(close_label)}">\n'
             f'<div class="scroll brief">\n{brief.svg(alt)}\n</div>\n<div class="scroll detail">\n{detail.svg(alt)}\n</div>\n'
             f'<figcaption>{caption}</figcaption>\n</figure>\n')
@@ -279,6 +300,12 @@ def selfcheck():
         m.legend(300, 80)
         m.verify(d, None, ['a.ts'])
         assert m.figure('c').count('marker-end') == 2  # the arrow, and the one in the legend
+        assert 'stroke-width:5' not in m.figure('c'), 'no file bars unless asked for'
+
+        m.mark_files([('a.ts', 'var(--teal)', 'a.ts')], 30, 190)
+        assert m.figure('c').count('stroke:var(--teal)') == 3, 'bars on one and two (mid has no ref), and one in the legend'
+        m.fn('one', 40, 40, 100, ref='a.ts:1-3', path=True, changed=True)
+        assert 'stroke:var(--teal);stroke-width:5;fill:none" d="M49 43V71"' in m.figure('c'), 'file bar sits right of the changed bar'
 
         def problems(build):
             m = base()
@@ -292,6 +319,7 @@ def selfcheck():
         assert 'not on the edge' in problems(lambda m: m.call('one', 'two', [(150, 57), (280, 57)], at='a.ts:2'))
         both = lambda m: (m.call('one', 'two', [(140, 50), (280, 50)], at='a.ts:2'), m.call('mid', 'two', [(210, 90), (210, 30), (330, 30), (330, 40)], at='a.ts:2'))
         assert 'cross or overlap' in problems(both)
+        assert 'no function has a ref in "b.ts"' in problems(lambda m: m.mark_files([('b.ts', 'red', 'b.ts')], 30, 190))
     print('selfcheck passed')
 
 

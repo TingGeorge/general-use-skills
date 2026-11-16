@@ -119,7 +119,8 @@ def draw(spec, detail):
         return o
 
     links = spec.get('links', [])
-    to_hub = {l['from']: l for l in links if l['to'] == hub}
+    # Keyed by (table, column): one table may point at the hub from two columns
+    to_hub = {(l['from'], l['column']): l for l in links if l['to'] == hub}
     others = [l for l in links if l['to'] != hub]
     apart = spec.get('apart', {})
 
@@ -137,9 +138,9 @@ def draw(spec, detail):
             f'{l["from"]} -> {l["to"]}: a link that skips the hub needs "{l["to"]}" right below "{l["from"]}" in the same column'
 
     row_y = lambda n, c: top[n][1] + HEAD + ROW * [k[0] for k in cols(n)].index(c) + 10
-    fk_y = {n: row_y(n, l['column']) for n, l in to_hub.items()}
+    fk_y = {k: row_y(k[0], k[1]) for k in to_hub}
 
-    side = {x: sorted((n for n in fk_y if top[n][0] == x), key=fk_y.get) for x in (EDGE, right_x)}
+    side = {x: sorted((n for n in fk_y if top[n[0]][0] == x), key=fk_y.get) for x in (EDGE, right_x)}
     most = max(len(v) for v in side.values())
     uh = max(height(hub), PORT * (most - 1) + 36)
     ys = list(fk_y.values()) or [EDGE + uh // 2]
@@ -219,6 +220,17 @@ def selfcheck():
         assert 'right below' in str(e)
     else:
         raise AssertionError('a link to a table above must be refused')
+
+    two_links = {
+        'hub': 'users', 'left': [], 'right': ['requests'],
+        'tables': {
+            'users': {'columns': [['id', 'uuid', 'PK']]},
+            'requests': {'columns': [['sender_id', 'uuid', 'FK'], ['recipient_id', 'uuid', 'FK']]},
+        },
+        'links': [{'from': 'requests', 'column': 'sender_id', 'to': 'users', 'from_end': 'many', 'to_end': 'one'},
+                  {'from': 'requests', 'column': 'recipient_id', 'to': 'users', 'from_end': 'many', 'to_end': 'one'}],
+    }
+    assert draw(two_links, False).count('fill:none" d="M') == 2, 'two links from one table to the hub are both drawn'
     print('selfcheck passed')
 
 

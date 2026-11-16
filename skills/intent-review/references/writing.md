@@ -16,7 +16,9 @@ Most reviewers read pictures first. A page that retells the code in paragraphs i
     <p class="sub">One line that says what the page covers</p>
     <nav class="toc" aria-label="…"><a href="#overview">…</a> <a href="#map">…</a> <a href="#topic-id">1 …</a> …</nav>
     <h2 id="overview">Overview</h2>     at most two sentences; then a fold holding a two-column table (topic / one line)
-    <h2 id="map">Function map</h2>      one sentence, the two-level map, a fold with at most 3 bullets (see "Function map")
+    <h2 id="er">ER diagram</h2>         pages with a schema: the ER diagram, then the table topics (see "Database before code")
+    <h2 id="map">Function map</h2>      module pages: lead line + module-structure figure first; then one sentence, the two-level
+                                        map, a fold with at most 3 bullets (see "Module structure" and "Function map")
     <h2 id="…" data-focus="session.ts:10-40,60-80">1 Topic name</h2>
     …the topic, as below…
     … more topics …
@@ -56,6 +58,8 @@ Each topic, in this order, and nothing else visible:
 ## Choosing topics
 
 Follow how the code is organised around purposes, not the file list. A topic is one thing the code is trying to achieve; it can cover part of a file or reach into several. 3 to 6 topics per page is the range that reads well. More than that means the page should be split.
+
+**Database before code.** A page that covers both a schema and the code that uses it puts the database half first: the ER diagram and the table topics, then the function map and the code topics, numbered on from the table topics. The reader then knows what is stored before following the requests that read and write it.
 
 ## Pages about a change (diff or PR)
 
@@ -113,9 +117,40 @@ Add `class="zoom"` to a `<figure>` and the page puts a button on it that opens t
 
 A zoom figure may hold two drawings of the same thing: `<div class="scroll brief">` is shown in the page and `<div class="scroll detail">` only in the window. Use the pair when the full picture cannot fit the page width without becoming cramped: the brief one keeps what the reader needs to follow the text, the detailed one has everything. `data-open` and `data-close` on the figure set the button's two labels, so the label can say what opening adds ("Show all columns") and not just "Enlarge". Opening a figure that only gets bigger gives the reader nothing new, so when you have a detail drawing, make sure it really shows more.
 
+### Module structure
+
+A page about one module puts one small figure just before the function map, in the map's section: how the module's files are laid out. The main file at the top, its helper below it, a lower helper below that, with arrows only going down (calls and imports); on the left the files outside the module that import the main file; on the right any setting that applies only to this module (a lint override, a config block). One lead line, the figure, a short caption saying what the arrows mean, and no judgement ("clean", "well layered"). Refs follow the normal rules. A one-file module needs no figure.
+
+    <p class="lead">Other modules import only index.ts; calls go one way, down.</p>
+    <figure><div class="scroll"><svg viewBox="0 0 800 270" role="img" aria-label="one sentence">
+      <rect class="box bx-none" x="20" y="20" width="150" height="40" rx="6"/>
+      <text data-ref="app.ts:23" class="t" x="36" y="45">app.ts</text>
+      <rect class="box bx-none" x="20" y="74" width="150" height="40" rx="6"/>
+      <text data-ref="orders/index.ts:4" class="t" x="36" y="99">orders module</text>
+      <path class="arw" marker-end="url(#a)" d="M170 40H250"/>
+      <path class="arw" marker-end="url(#a)" d="M170 94H250"/>
+      <text class="lab mid" x="210" y="71">only this</text>
+      <rect class="box bx-blue" x="250" y="20" width="320" height="94" rx="6"/>
+      <text data-ref="bookings/index.ts:1-6" class="t" x="266" y="46">index.ts (main file)</text>
+      <text class="s" x="266" y="70">routes, functions for other modules</text>
+      <path class="arw" marker-end="url(#a)" d="M410 114V140"/>
+      <rect class="box bx-gold" x="250" y="140" width="320" height="44" rx="6"/>
+      <text data-ref="store.ts:1-8" class="t" x="266" y="167">store.ts</text>
+      <text class="s" x="350" y="167">SQL</text>
+      <path class="arw" marker-end="url(#a)" d="M410 184V210"/>
+      <rect class="box bx-teal" x="250" y="210" width="320" height="44" rx="6"/>
+      <text data-ref="rules.ts:1-2" class="t" x="266" y="237">rules.ts</text>
+      <text class="s" x="350" y="237">pure rules, no database</text>
+      <path class="arw" marker-end="url(#a)" d="M570 90H600V232H570"/>
+      <text class="lab" x="608" y="166">also calls</text>
+      <rect class="box bx-gray" x="640" y="20" width="150" height="84" rx="6"/>
+      <text data-ref="biome.jsonc:22-30" class="t" x="656" y="46">line width 100</text>
+      <text class="s" x="656" y="68">this module only</text>
+    </svg></div><figcaption>Arrows are imports and calls and only go down: store.ts and rules.ts do not import index.ts.</figcaption></figure>
+
 ### Function map
 
-A page about code gets one function map near the top, before the first topic: grey containers are files, the boxes in them are functions, arrows are calls. It answers what the topics do not: which function calls which, and in which file. A reviewer looks at it first to know where things are, and comes back to it while reading.
+A page about code gets one function map before its first code topic: grey containers are files (in the design view below, the design's parts), the boxes in them are functions, arrows are calls. It answers what the topics do not: which function calls which, and in which file. A reviewer looks at it first to know where things are, and comes back to it while reading.
 
 Draw it with `scripts/fn_map.py`: a small library, not a layout engine. You write a short Python script that places the boxes and routes the lines, and the library refuses a drawing with a line through a box or a name, crossing lines, or a name wider than its box. It also refuses arrows nobody checked: every `call` names the line of code where the call is (`at='file.ts:23'`), and `verify` checks that this line sits inside the caller and contains the callee. So the script cannot finish until every arrow is true. The file's docstring has the API and a small example.
 
@@ -123,14 +158,16 @@ How to lay it out so it reads well:
 
 - **One main path.** Find the path the page is about (a request coming in, a job running, a message being handled) and put its functions in one column, top to bottom, with `path=True`. That column is what the reader follows.
 - **Helpers beside their callers.** Put the functions the path calls to the right, at the same height as the caller, in their own file containers. Most arrows then run straight across. Shared helpers that many things call (errors, logging) go in a row along the bottom.
-- **Two levels.** In the page the map shows only the main path: 8 to 10 boxes, no groups, about 10 arrows. The full map (about 20 functions at most) sits behind the figure's button: build both and join them with `fn_map.pair(brief, detail, caption, …)`. Readers found the full map alone too busy to start from.
+- **Two levels.** Build two maps and join them with `fn_map.pair(in_page, behind_button, caption, …)`. Which two depends on whether the project has a design diagram for the module (an Excalidraw or other figure of its parts):
+  - **With a design diagram**: the page shows the full map by file (files as containers, every function the topics talk about, about 20 boxes at most). The button opens the design view: the same functions arranged by the design's groups, one container per part of the design, named as in it and with `ref=` set to the lines that do that part (the builder refuses a ref that names no file), each function box marked with its file by a colour bar (`m.mark_files(...)`, whose row of entries is that view's legend). The reader compares the code against the design. Name the button for that ("Arrange as in the design"). In the design view, a line that is not a call (a write to a table, a hand-off to a module not built yet) is `kind='next'`; a module not built yet is a `dashed=True` container. The caption says what each such line is. The caption also names the functions one view has and the other does not.
+  - **Without one**: the page shows only the main path, 8 to 10 boxes, no groups, about 10 arrows, and the button opens the full map. Readers found the full map alone too busy to start from.
 - **In the full map, about 20 functions at most.** Only the ones the page's topics talk about. Leave out what is called from everywhere (an error class, a logger) and say in the caption what is left out; an honest gap is better than a full, unreadable picture.
 - **Three kinds of line**: `call` (black) for a direct call, `kind='next'` (green) when control passes on without a direct call (middleware order, a queue, an event), `kind='error'` (red dashed) for what runs when something throws.
 - **No crossings.** Reroute, reorder the boxes, or use the two tools the library gives: a `group` around functions that share callers or callees (one line to the group stands for all of them), and a fork (a second arrow from the same function may start on its first arrow). If it still cannot be drawn without crossings, the map has too much in it.
 - **Functions outside the page** (called by or calling this page's code) go in a `dashed=True` container with no ref.
 - **Diff pages**: mark the functions the change touches with `changed=True`, so the reader sees where the change sits.
 
-Leave room: columns about 250px apart, rows about 50px apart, 30px between a container's top and its first box (the file name sits there). Run the script, read the problems it lists, fix, and repeat until it prints the figure. Then put the figure in the fragment under its own heading, with one paragraph before it saying how to read it, and a caption that explains anything the picture cannot (a group, a fork, what is left out). Translate the legend with `legend(x, y, text={...})`.
+Leave room: columns about 250px apart, rows about 50px apart, 30px between a container's top and its first box (the file name sits there). A design view may be wider than 800 (`Map(height, width=…)`); it is only seen opened over the window. Run the script, read the problems it lists, fix, and repeat until it prints the figure. Then put the figure in the fragment under its own heading (after the module-structure figure, if any), with one paragraph before it saying how to read it, and a caption that explains anything the picture cannot (a group, a fork, what is left out). Translate the legend with `legend(x, y, text={...})`.
 
 A page with fewer than about four functions that call each other (a schema, a list of types) does not need a map: say so in your report and leave it out.
 
