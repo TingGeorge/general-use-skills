@@ -15,6 +15,7 @@
   <a href="#limits">Known limits</a>
 </nav>
 
+<section class="card">
 <h2 id="overview">Overview</h2>
 <p>A small HTTP API that creates, changes, cancels and lists table bookings for one restaurant. Underneath all of it is one rule: two live bookings never hold the same table at the same time.</p>
 <details class="more"><summary>The topics at a glance</summary><div class="in">
@@ -29,6 +30,9 @@
 </div></details>
 
 <!-- MAP:start -->
+</section>
+
+<section class="card">
 <h2 id="map">Function map</h2>
 <p>Boxes are functions and arrows are calls; click a box to see that function on the right.</p>
 <figure class="zoom" data-open="Show every function" data-close="Close">
@@ -146,8 +150,10 @@
 </ul>
 </div></details>
 <!-- MAP:end -->
+</section>
 
-<h2 id="create" data-focus="routes.ts:25-37,51-67">1 Booking a table</h2>
+<section class="card">
+<h2 id="create" data-focus="routes.ts:25-37,51-67"><span class="badge">1</span>Booking a table</h2>
 <p class="lead">A guest asks for a time and a party size; the API picks the table and stores the booking.</p>
 <figure>
 <div class="scroll">
@@ -205,7 +211,8 @@
   <div class="b m"><h3>Method</h3><p>Under a lock on the day it lists the free tables, takes the smallest that fits and inserts (<code>routes.ts:58-65</code>).</p></div>
   <div class="b w"><h3>Why</h3><p>The smallest fitting table keeps the large tables for large parties (D-03).</p></div>
 </div>
-<details class="more"><summary>Details: 4 results, 2 reasons</summary><div class="in">
+<p class="doc"><b>Documents cited</b>D-03</p>
+<details class="more"><summary>Details: 4 results, 3 reasons</summary><div class="in">
 <h4>Results</h4><ul>
   <li>Tables are never joined: a party of 7 gets <code>NO_TABLE</code> when no single table has 7 seats (<code>rules.ts:41</code>).</li>
   <li>A 22:00 start is accepted, 22:01 is not (<code>rules.ts:32</code>).</li>
@@ -215,10 +222,13 @@
 <h4>Reasons</h4><ul>
   <li><b>Length by party size:</b> parties above 4 stayed past 90 minutes (D-01, <code>rules.ts:34</code>).</li>
   <li><b>Day from the server clock:</b> the server runs in the restaurant's time zone (D-02, <code>routes.ts:35-36</code>).</li>
+  <li class="nodoc"><b>15 clearing minutes:</b> D-01 gives the number; no document says why 15 (<code>rules.ts:35</code>).</li>
 </ul>
 </div></details>
+</section>
 
-<h2 id="status" data-focus="rules.ts:46-71">2 Booking status</h2>
+<section class="card">
+<h2 id="status" data-focus="rules.ts:46-71"><span class="badge">2</span>Booking status</h2>
 <p class="lead">A booking moves through five statuses; staff actions change it, and the clock shows a guest who did not come.</p>
 <figure>
 <div class="scroll">
@@ -268,6 +278,7 @@
   <div class="b m"><h3>Method</h3><p>Four statuses are stored; <code>statusOf</code> shows a booking still booked 15 minutes after its start as <code>no_show</code> (<code>rules.ts:48-52</code>).</p></div>
   <div class="b w"><h3>Why</h3><p>Computed on read, it needs no scheduled job that marks no-shows (D-05).</p></div>
 </div>
+<p class="doc"><b>Documents cited</b>D-05</p>
 <details class="more"><summary>Details: 3 results, 1 reason, 1 table</summary><div class="in">
 <div class="tbl"><table>
 <tr><th>Action</th><th>Allowed from</th><th>Becomes</th></tr>
@@ -284,8 +295,10 @@
   <li><b>A no_show can be seated:</b> a late guest still gets the table (D-05, <code>rules.ts:55</code>).</li>
 </ul>
 </div></details>
+</section>
 
-<h2 id="overlap" data-focus="store.ts:40-60">3 No double booking</h2>
+<section class="card">
+<h2 id="overlap" data-focus="store.ts:40-60"><span class="badge">3</span>No double booking</h2>
 <p class="lead">Two requests for the last free table at the same moment end with one booking and one refusal.</p>
 <figure>
 <div class="scroll">
@@ -338,6 +351,7 @@
   <div class="b m"><h3>Method</h3><p>Every write first locks the booking's day, so one request reads and inserts before the next one reads (<code>store.ts:43-45</code>).</p></div>
   <div class="b w"><h3>Why</h3><p>A serializable transaction would abort the second request, which would then have to retry (D-04).</p></div>
 </div>
+<p class="doc"><b>Documents cited</b>D-04</p>
 <details class="more"><summary>Details: 4 results, 2 reasons, 1 figure</summary><div class="in">
 <h4>Results</h4><ul>
   <li>A slot ending at 19:45 and one starting at 19:45 can share a table: ranges are <code>'[)'</code> (<code>store.ts:34</code>).</li>
@@ -366,8 +380,10 @@
 <figcaption><code>'[)'</code> includes the start and leaves out the end, so touching slots do not overlap.</figcaption>
 </figure>
 </div></details>
+</section>
 
-<h2 id="change" data-focus="routes.ts:69-113">4 Change and cancel</h2>
+<section class="card">
+<h2 id="change" data-focus="routes.ts:69-113"><span class="badge">4</span>Change and cancel</h2>
 <p class="lead">A booking can be moved while it is booked and cancelled until someone seats it; late cancels are marked.</p>
 <figure>
 <div class="scroll">
@@ -408,6 +424,7 @@
   <div class="b m"><h3>Method</h3><p><code>changeBooking</code> chooses a table again under the day lock and keeps the old one when it still fits (<code>routes.ts:81-85</code>).</p></div>
   <div class="b w"><h3>Why</h3><p>The code comment says the host may have promised the guest that table (<code>routes.ts:82</code>).</p></div>
 </div>
+<p class="doc"><b>Documents cited</b>D-06</p>
 <details class="more"><summary>Details: 4 results, 2 reasons</summary><div class="in">
 <h4>Results</h4><ul>
   <li>A change to another day locks only the new day (<code>routes.ts:75</code>).</li>
@@ -420,8 +437,10 @@
   <li><b>Kept, not deleted:</b> the spec says delete; D-06 keeps the row for the flag.</li>
 </ul>
 </div></details>
+</section>
 
-<h2 id="data" data-focus="001_bookings.sql:6-47">5 Stored data</h2>
+<section class="card">
+<h2 id="data" data-focus="001_bookings.sql:6-47"><span class="badge">5</span>Stored data</h2>
 <p class="lead">Four tables hold the floor plan, the guests, the bookings and each booking's history.</p>
 <figure>
 <div class="scroll">
@@ -469,6 +488,7 @@
   <div class="b m"><h3>Method</h3><p><code>bookings</code> points at a guest and a table and holds its time as one range, <code>slot</code> (<code>001_bookings.sql:21-38</code>).</p></div>
   <div class="b w"><h3>Why</h3><p>A range lets the exclusion constraint compare whole slots on one table (D-04).</p></div>
 </div>
+<p class="doc"><b>Documents cited</b>D-06; D-04</p>
 <details class="more"><summary>Details: 4 results, 1 reason</summary><div class="in">
 <h4>Results</h4><ul>
   <li>A new booking with a known phone replaces that guest's name (<code>store.ts:62-67</code>).</li>
@@ -480,7 +500,9 @@
   <li><b>No <code>no_show</code> in the enum:</b> it is computed, not stored (D-05, <code>001_bookings.sql:18</code>).</li>
 </ul>
 </div></details>
+</section>
 
+<section class="card">
 <h2 id="spec">Differences from the spec</h2>
 <p>The code differs from the booking spec in 2 places.</p>
 <details class="more"><summary>Show: 2 differences</summary><div class="in">
@@ -490,7 +512,9 @@
 <tr><td>§4.1: a cancelled booking is deleted</td><td>Kept as <code>cancelled</code>, with <code>late_cancel</code></td><td>D-06</td></tr>
 </table></div>
 </div></details>
+</section>
 
+<section class="card">
 <h2 id="decisions">Decisions</h2>
 <p>6 recorded decisions govern this code, all in <code>docs/decisions.md</code>.</p>
 <details class="more"><summary>Show: 6 decisions</summary><div class="in">
@@ -504,7 +528,9 @@
 <tr><td>D-06</td><td>Late cancels allowed and flagged</td><td>Refusing them; a fee</td><td>Front of house</td></tr>
 </table></div>
 </div></details>
+</section>
 
+<section class="card">
 <h2 id="limits">Known limits</h2>
 <p>The code marks 2 simplifications with a <code>ponytail</code> comment.</p>
 <details class="more"><summary>Show: 2 limits</summary><div class="in">
@@ -514,3 +540,5 @@
 <tr><td>Hours read in the server's time zone (<code>rules.ts:30</code>)</td><td>A second location in another zone</td><td>A time zone per restaurant (D-02)</td></tr>
 </table></div>
 </div></details>
+</section>
+

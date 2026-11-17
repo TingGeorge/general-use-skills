@@ -8,7 +8,7 @@ You write an HTML fragment. `scripts/build_page.py` checks it, embeds the source
 
 ## The form: a picture and a few short lines
 
-Most reviewers read pictures first. A page that retells the code in paragraphs is not read, and the code is right beside the page anyway. So what the reader sees without clicking is, per topic, one sentence, one diagram and three short rows. A little more sits one click away in a fold. Everything else is left out.
+Most reviewers read pictures first. A page that retells the code in paragraphs is not read, and the code is right beside the page anyway. So what the reader sees without clicking is, per topic, one sentence, one diagram and three short cells side by side. A little more sits one click away in a fold. Everything else is left out.
 
     <!-- sources: src/auth/session.ts, db/migrations/001.sql -->   paths from the repo root; these files go in the code pane
     <!-- skipped: bun.lock, src/gen/types.ts -->                    diff pages only: changed files you chose not to embed
@@ -19,24 +19,29 @@ Most reviewers read pictures first. A page that retells the code in paragraphs i
     <h2 id="er">ER diagram</h2>         pages with a schema: the ER diagram, then the table topics (see "Database before code")
     <h2 id="map">Function map</h2>      module pages: lead line + module-structure figure first; then one sentence, the two-level
                                         map, a fold with at most 3 bullets (see "Module structure" and "Function map")
-    <h2 id="…" data-focus="session.ts:10-40,60-80">1 Topic name</h2>
+    <h2 id="…" data-focus="session.ts:10-40,60-80"><span class="badge">1</span>Topic name</h2>
     …the topic, as below…
     … more topics …
     closing sections (see "Closing sections")
 
 Write headings and text in the project's language. The examples here are in English only to show the shape.
 
-Each topic, in this order, and nothing else visible:
+Every `<h2>` section (overview, ER diagram, function map, each topic, each closing section) is wrapped in `<section class="card">…</section>`, a white card; the `<h1>`, sub line and table of contents stay outside. A topic's number goes in `<span class="badge">` at the start of its `<h2>`.
 
+Each topic card, in this order, and nothing else visible:
+
+    <section class="card">
+    <h2 id="session" data-focus="session.ts:10-40"><span class="badge">1</span>Topic name</h2>
     <p class="lead">One sentence, about 20 words at most, saying what this part does. No line refs.</p>
 
     <figure>…the diagram that shows this topic's mechanism…<figcaption>One sentence.</figcaption></figure>
 
     <div class="parts tight">
-      <div class="b p"><h3>Problem</h3><p>One sentence: why this code exists.</p></div>
+      <div class="b p"><h3>Problem</h3><p>One sentence: why this code exists (spec §3).</p></div>
       <div class="b m"><h3>Method</h3><p>One sentence: what it does (<code>session.ts:12-30</code>).</p></div>
       <div class="b w"><h3>Why</h3><p>One sentence: the main reason, with its source (ADR-0012).</p></div>
     </div>
+    <p class="doc"><b>Documents cited</b>spec §3; ADR-0012</p>
 
     <details class="more">
       <summary>Details: 4 results, 3 reasons</summary>
@@ -45,13 +50,17 @@ Each topic, in this order, and nothing else visible:
         <h4>Reasons</h4>  <ul><li><b>Short label:</b> one clause and its source.</li></ul>
       </div>
     </details>
+    </section>
 
 - **Every topic has a diagram.** If nothing about the topic can be drawn (a flow with decisions, a state machine, a sequence between actors, a timeline, how tables or types relate), it is probably not a topic.
-- **The three rows are one sentence each**, with at most one source in brackets. The builder requires exactly these three blocks, in this order.
+- **The three cells are one sentence each**, with at most one source in brackets. They sit side by side, so keep each to one or two short lines. The builder requires exactly these three blocks, in this order.
+- **Colour blocks state facts, never a judgement.** There are two, and no others (no "recommended", "problem" or "check this" boxes):
+  - **Blue `<p class="doc">`**, right after the three cells: the documents (spec sections, ADRs, PR, issues) the three cells cite, copied as written there, separated by `;` (`；` in Chinese); the label is 文件出處 in Chinese. Leave it out when the cells cite only code.
+  - **Gold `nodoc`**, wherever the text says no document gives the reason: on the Why cell (`<div class="b w nodoc">`), on a fold bullet (`<li class="nodoc">`), or on a `<span class="nodoc">` around that sentence when the bullet also holds a documented reason. Only where the text says so; the page marks the fold's title with a gold dot and explains gold in its notes.
 - **The fold is small: about 150 words at most.** Results are the behaviours a reader could not see from the diagram or guess from the code's shape: surprising cases, what happens on failure. Reasons are the ones beyond the main one, each with its source. One short sentence per bullet, each with one `file:line` ref or source. A small table (at most 5 rows) or a second figure may go in the fold when it shows something the main diagram does not.
 - **The summary line says what is inside, with counts**, so the reader can decide whether to open it.
 - **Leave out** what the code shows plainly at the cited lines and what repeats the diagram. Do not write a full method paragraph: the diagram is the method.
-- A fold is always `<details class="more"><summary>…</summary><div class="in">…</div></details>`, never nested. The topic's diagram and its three rows are never inside a fold.
+- A fold is always `<details class="more"><summary>…</summary><div class="in">…</div></details>`, never nested. The topic's diagram, its three cells and the blue block are never inside a fold.
 
 `data-focus` on the `<h2>` becomes the one "show code" button of the topic: one file and all the lines that belong to the topic. When a topic spans files, use the main file; the others stay reachable through inline refs.
 
@@ -71,14 +80,14 @@ The code pane shows the new version of each file, with added lines marked green 
 - Every changed file is either in `sources` or in `skipped`; the builder fails otherwise. Leave the `skipped` comment out when nothing is skipped. Skip only what a person would not read: lockfiles, generated code, snapshots, binary files. A removed file cannot be embedded, so it goes in `skipped`.
 - The builder prints a warning for each changed line range that no topic or ref points at (added blank lines are ignored). Each warning is a topic you missed, a line that belongs inside a ref you already have (widen the ref), or a change with no meaning of its own, such as a trailing comma or reformatting, which goes in the closing "other changes" table. Leave no warning unaccounted for: the reader trusts that the page covers the whole change.
 - When the change spans several commits, add a commit column to the overview table so each topic names the commit it comes from.
-- When a change states no intent (a commit that only says "bug fix", no PR text, no comment): in **Problem**, describe what the code did before as plain fact, and in **Why this way** write that the reason is not documented. Do not reconstruct the intent from the diff.
+- When a change states no intent (a commit that only says "bug fix", no PR text, no comment): in **Problem**, describe what the code did before as plain fact, and in **Why this way** write that the reason is not documented and mark the cell `nodoc`. Do not reconstruct the intent from the diff.
 
 ## Rules for content
 
 These rules are the reason the page is useful. A reviewer who is handed conclusions stops reading the code.
 
 - **No leading.** Do not tell the reader what to check, confirm or worry about. Do not judge ("this is better", "risky", "should"). Do not list bugs or findings. State what the code does and let the reader judge. If you see something that looks wrong, describe the behaviour plainly in "What follows from this" (for example "an empty string passes this check") and stop there.
-- **The "why" has a source.** Reasons come only from written material: specs, ADRs or design docs, the PR description, commit messages, issues, code comments. Cite the source. If nothing records the reason, write that the reason is not documented. Do not invent a reason that sounds right: the reader will take it as the author's intent.
+- **The "why" has a source.** Reasons come only from written material: specs, ADRs or design docs, the PR description, commit messages, issues, code comments. Cite the source. If nothing records the reason, write that the reason is not documented and mark it gold (`nodoc`). Do not invent a reason that sounds right: the reader will take it as the author's intent.
 - **Every claim comes from code you read.** Do not describe from names. Avoid universal words (always, all, never, only) unless you checked every case. Line numbers are exact. Tests are a good way to confirm behaviour.
 - **Scope.** Only this page's subject. If behaviour belongs to another page, name that page in one clause and move on.
 - **Plain writing.** Short sentences, the project's language, identifiers in their original form. The first time a concept appears that the reader may not know (a transaction, an upsert, a mutex), say what it does in a few words. No filler and no slogans.
@@ -86,7 +95,7 @@ These rules are the reason the page is useful. A reviewer who is handed conclusi
 
 ## Closing sections
 
-Add each one only when there is real content for it. Each is an `<h2>`, one sentence giving the count, and the table inside a fold; keep every row, with cells cut to short phrases:
+Add each one only when there is real content for it. Each is a card with an `<h2>`, one sentence giving the count, and the table inside a fold; keep every row, with cells cut to short phrases. No summary table at the end of the page:
 
 - **Differences from the spec**: what the spec says / what the code does / the source for the difference. Only real ones you can point at.
 - **Decisions**: the ADRs or recorded decisions that govern this code: decision / what was given up / who decided.

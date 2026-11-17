@@ -1,87 +1,94 @@
 <title>@@TITLE@@</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: one reading column in the same look as the other backend plan pages. Every piece repeats three blocks (problem, method, why) around its diagram. Light only, static. */
+/* Layout: one reading column of white cards on a cool blue-grey page. Each topic is a card: a lead line, its diagram, three cells (problem, method, why) side by side, then a fold. Light only, static. */
 :root {
-  --bg: #F6F4EC;
-  --panel: #FFFFFF;
-  --fg: #1E2A36;
-  --muted: #5A6775;
-  --line: #D9D6C8;
-  --blue: #1D4E89;
-  --blue-tint: #E4ECF6;
-  --teal: #1B7A74;
-  --teal-tint: #DDEFEC;
-  --gold: #9A6A0E;
-  --gold-tint: #F7EBCB;
-  --rust: #A63D2F;
-  --rust-tint: #F6E2DD;
-  --gray-tint: #E9E8E1;
-  --code-bg: #EDEBE0;
-  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --bg: #f7f9fc;
+  --panel: #ffffff;
+  --fg: #1c2733;
+  --muted: #5b6b7c;
+  --line: #d5dde7;
+  --blue: #1f6fb2;
+  --blue-tint: #e3f0fa;
+  /* Teal, not the green of the diff marks: a function map's file bars use it next to the green "changed" bar */
+  --teal: #17807a;
+  --teal-tint: #ddf0ee;
+  --gold: #b7791f;
+  --gold-tint: #fbf0d9;
+  --rust: #b5473a;
+  --rust-tint: #f8e4e0;
+  --gray-tint: #edf1f6;
+  --code-bg: #e3f0fa;
   --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   color-scheme: light;
 }
-body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.75; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
 .wrap { max-width: 900px; margin: 0 auto; padding-block: 28px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.35; margin: 0; }
-h1 { font-size: 2rem; color: var(--blue); letter-spacing: 0.01em; }
-h2 { font-size: 1.4rem; color: var(--blue); border-bottom: 2px solid var(--gold); padding-bottom: 6px; margin-top: 52px; scroll-margin-top: 16px; }
-h3 { font-size: 1.08rem; color: var(--teal); margin-top: 24px; }
+h1, h2, h3 { font-family: var(--font-body); text-wrap: balance; line-height: 1.35; margin: 0; }
+h1 { font-size: 30px; line-height: 1.2; }
+h2 { font-size: 20px; margin-top: 40px; scroll-margin-top: 16px; }
+h3 { font-size: 16px; margin-top: 20px; }
 p { margin: 10px 0 0; }
-.sub { color: var(--muted); margin: 6px 0 0; font-size: 0.95rem; }
-.note { font-size: 0.88rem; color: var(--muted); }
-code { font-family: var(--font-mono); font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+.sub { color: var(--muted); margin: 4px 0 0; }
+.note { font-size: 13px; color: var(--muted); }
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
 a { color: var(--blue); }
 a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
-nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 16px; font-size: 0.92rem; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 16px; font-size: 14px; }
 
-.tbl { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
-table { border-collapse: collapse; width: 100%; font-size: 0.9rem; line-height: 1.6; }
+/* Every h2 section is a white card; a topic's number sits in a round blue badge */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 28px; }
+.card > h2:first-child { margin-top: 0; }
+.badge { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-right: 10px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 14px; line-height: 1; }
+
+.tbl { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.6; }
 th, td { padding: 8px 11px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
 tr:last-child td { border-bottom: 0; }
-th { background: var(--blue-tint); color: var(--blue); font-weight: 500; white-space: nowrap; }
+th { background: var(--blue-tint); color: var(--fg); font-size: 13px; font-weight: 500; white-space: nowrap; }
 td.c, th.c { text-align: center; }
 td .yes { color: var(--teal); font-weight: 700; }
 td .no { color: var(--muted); }
 td .skip { color: var(--gold); }
 .num { font-variant-numeric: tabular-nums; }
 
-.parts { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
-@media (min-width: 720px) { .parts { grid-template-columns: 1fr 1fr; } .parts .b.w { grid-column: 1 / -1; } }
-.b { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; min-width: 0; font-size: 0.93rem; line-height: 1.7; }
-.b h3 { margin: 0 0 4px; font-size: 1rem; font-family: var(--font-body); font-weight: 700; }
-.b.p h3 { color: var(--rust); }
-.b.m h3 { color: var(--blue); }
-.b.w h3 { color: var(--teal); }
-.b h4 { margin: 10px 0 0; font-size: 0.93rem; font-family: var(--font-body); font-weight: 700; color: var(--blue); }
+/* Problem, method, why: three cells side by side. As the reading column narrows (its width depends on the code pane) they wrap to two rows, and under 700px they stack */
+.parts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.b { box-sizing: border-box; flex: 1 1 170px; min-width: 0;border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel); font-size: 14px; line-height: 1.6; }
+.b h3 { margin: 0 0 4px; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; color: var(--muted); }
+.b h4 { margin: 10px 0 0; font-size: 14px; font-weight: 700; color: var(--blue); }
 .b ul { margin: 4px 0 0; padding-left: 1.15em; }
 .b li + li { margin-top: 5px; }
-.b p:first-of-type { margin-top: 0; }
+.b p { margin: 0; }
+@media (max-width: 700px) { .parts > .b { flex-basis: 100%; } }
 
-/* Visual-first topics: one lead line, the picture, three short rows; the rest folds away */
-.lead { font-size: 1.04rem; font-weight: 500; line-height: 1.7; margin: 14px 0 0; }
-.wrap .parts.tight { grid-template-columns: 1fr; gap: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); overflow: hidden; }
-.parts.tight .b { display: grid; grid-template-columns: 5.4em minmax(0, 1fr); gap: 12px; border: 0; border-radius: 0; background: none; padding: 9px 14px; }
-.parts.tight .b + .b { border-top: 1px solid var(--line); }
-.parts.tight .b h3 { margin: 0; font-size: 0.9rem; line-height: 1.75; }
-.parts.tight .b p { margin: 0; }
-details.more { margin-top: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
-details.more > summary { cursor: pointer; padding: 8px 14px; font-size: 0.9rem; font-weight: 500; color: var(--blue); border-radius: 6px; }
+/* Colour blocks state facts only: blue lists the documents a topic cites, gold marks a reason no document gives */
+.doc { margin: 10px 0 0; padding: 8px 14px; border-radius: 8px; background: var(--blue-tint); font-size: 14px; }
+.doc b { margin-right: 10px; font-size: 12px; letter-spacing: 0.06em; color: var(--blue); }
+.b.nodoc { background: var(--gold-tint); border-color: var(--gold-tint); }
+.b.nodoc h3 { color: var(--gold); }
+li.nodoc { list-style: none; margin-left: -1.15em; padding: 4px 10px; border-radius: 6px; background: var(--gold-tint); }
+span.nodoc { padding: 1px 4px; border-radius: 4px; background: var(--gold-tint); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+details.more:has(.nodoc) > summary::after { content: " \25CF"; color: var(--gold); }
+
+/* Visual-first topics: one lead line, the picture, three short cells; the rest folds away */
+.lead { font-size: 16px; font-weight: 500; margin: 12px 0 0; }
+details.more { margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+details.more > summary { cursor: pointer; padding: 8px 14px; font-size: 14px; font-weight: 500; color: var(--blue); border-radius: 8px; }
 details.more > summary:hover { background: var(--blue-tint); }
 details.more > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
-details.more[open] > summary { border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0; }
-details.more > .in { padding: 2px 14px 14px; font-size: 0.93rem; line-height: 1.7; }
-details.more h4 { margin: 14px 0 2px; font-size: 0.93rem; font-family: var(--font-body); font-weight: 700; color: var(--blue); }
+details.more[open] > summary { border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0; }
+details.more > .in { padding: 2px 14px 14px; font-size: 14px; line-height: 1.7; }
+details.more h4 { margin: 14px 0 2px; font-size: 14px; font-weight: 700; color: var(--blue); }
 details.more ul { margin: 4px 0 0; padding-left: 1.15em; }
 details.more li + li { margin-top: 5px; }
 details.more .tbl { background: var(--bg); }
 h2 + details.more { margin-top: 14px; }
 
-figure { margin: 18px 0 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+figure { margin: 16px 0 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
 figure .scroll { overflow-x: auto; }
 /* A drawing keeps its own size whatever the width of the page: the script sets its width from its viewBox, and a narrow page scrolls it sideways */
 figure svg { display: block; height: auto; margin: 0 auto; }
@@ -145,7 +152,7 @@ svg rect.ref:hover { stroke-width: 2.6; }
 .show { font-family: var(--font-body); font-size: 0.78rem; line-height: 1.5; padding: 2px 10px; border: 1px solid var(--blue); border-radius: 4px; background: var(--blue-tint); color: var(--blue); cursor: pointer; white-space: nowrap; }
 .show:hover, .spot > .show { background: var(--blue); color: var(--bg); }
 .show:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
-h2 > .show { float: right; margin: 5px 0 0 10px; }
+h2 > .show { float: right; margin: 3px 0 0 10px; }
 
 /* The code pane is dark like an editor (VS Code Dark+); the tokens are re-pointed here so every rule below follows. */
 #code {
@@ -209,7 +216,7 @@ h2 > .show { float: right; margin: 5px 0 0 10px; }
 @media (min-width: 1200px) {
   .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, min(var(--code-w, 46%), calc(100% - 360px))); }
   .wrap { max-width: none; margin: 0; padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: 24px; }
-  .parts, .two { grid-template-columns: 1fr; }
+  .two { grid-template-columns: 1fr; }
   #code, #code.open { display: flex; position: sticky; top: 0; align-self: start; width: auto; height: 100vh; box-shadow: none; padding: 0; padding-right: env(safe-area-inset-right, 0px); }
   #c-close { display: none; }
 }

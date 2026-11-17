@@ -24,6 +24,7 @@ LABELS = {
         'noteRev': '程式：<code>{}</code>。',
         'noteTree': '程式：目前工作目錄裡的檔案（還沒 commit 的修改也在內）。',
         'noteUse': '右邊是完整的程式檔。按每一段標題旁的「看程式」，右邊會換到那段程式，相關的行左邊有金色線，其他行變淡；捲動頁面不會改變右邊的內容。點任何 <code>檔名:行號</code> 或圖上的方框也可以。',
+        'noteGold': '金色底的是文件沒寫理由的地方；摺疊標題後有金點的，裡面有一處。',
         'noteDiff': '這一頁看的是 <code>{}</code> 之後的修改。右邊行號旁有綠線的是新增或改過的行；紅底、沒有行號的是被刪掉的行；檔名後有綠點的是改過的檔案。整個檔案都是新的時候不畫綠線，路徑後面會寫「新檔案」。',
     },
     'en': {
@@ -32,6 +33,7 @@ LABELS = {
         'noteRev': 'Code: <code>{}</code>.',
         'noteTree': 'Code: the files in the working tree now, uncommitted changes included.',
         'noteUse': 'The right side holds the full source files. Press "Show code" beside a heading and the right side moves to that code: its lines get a gold bar on the left and the other lines fade. Scrolling the page never changes the right side. Any <code>file:line</code> or box in a diagram is clickable too.',
+        'noteGold': 'A gold background marks a reason no document gives; a gold dot after a fold\'s title means the fold holds one.',
         'noteDiff': 'This page covers the changes since <code>{}</code>. A green bar beside a line number marks an added or changed line; rows on red without a number are removed lines; a green dot after a file name marks a changed file. A file that is entirely new has no green bars; its path says "new file".',
     },
 }
@@ -89,7 +91,8 @@ class Check(HTMLParser):
         if tag == 'div' and 'parts' in cls:
             self.parts.append([])
         elif tag == 'div' and 'b' in cls and 'parts' in self.stack:
-            self.parts[-1].append(' '.join(c for c in cls if c != 'b'))
+            # Only the role counts: a cell may also carry "nodoc" (gold: no document gives the reason)
+            self.parts[-1].append(' '.join(c for c in cls if c in ('p', 'm', 'w')))
         if 'data-ref' in a:
             self.refs.append(a['data-ref'])
         if tag == 'code' or (tag == 'text' and 'm' in cls):
@@ -243,6 +246,8 @@ def build(fragment, out, repo='.', rev=None, base=None, lang='en'):
     if base:
         note += '<p class="note">' + L['noteDiff'].format(html.escape((git(repo, 'rev-parse', '--short', base) or base).strip())) + '</p>\n'
     note += f'<p class="note">{L["noteUse"]}</p>\n'
+    if 'nodoc' in frag:
+        note += f'<p class="note">{L["noteGold"]}</p>\n'
 
     body = re.sub(r'<!--\s*(sources|skipped):.*?-->\s*', '', frag, flags=re.S)
     k = body.index('</p>', body.index('class="sub"')) + 4
@@ -265,6 +270,7 @@ def build(fragment, out, repo='.', rev=None, base=None, lang='en'):
 
 
 def selfcheck():
+    L_GOLD = LABELS['en']['noteGold']
     assert names_for(['a/index.ts', 'b/index.ts', 'b/x.ts']) == {'a/index.ts': 'a/index.ts', 'b/index.ts': 'b/index.ts', 'b/x.ts': 'x.ts'}
     with tempfile.TemporaryDirectory() as d:
         def run(*a):
@@ -290,6 +296,11 @@ def selfcheck():
         assert src['a.ts']['add'] == [[2, 2], [4, 4]], src['a.ts']['add']
         assert src['a.ts']['del'] == {'2': ['two', 'three']}, src['a.ts']['del']
         assert src['new.ts'].get('new') and '@@' not in page.split('<script id="src"')[0]
+        assert L_GOLD not in page, 'no gold note on a page without a gold block'
+
+        open(f'{d}/f.html', 'w').write('<!-- sources: a.ts -->' + part.replace('"b w"', '"b w nodoc"'))
+        assert build(f'{d}/f.html', f'{d}/o.html', d), 'a why cell may also be marked nodoc'
+        assert L_GOLD in open(f'{d}/o.html').read(), 'a page with a gold block explains it'
 
         open(f'{d}/f.html', 'w').write('<!-- sources: a.ts -->' + part.replace('<code>a.ts:2</code>', '<code>127.0.0.1:4000</code><code>localhost:80</code>'))
         assert build(f'{d}/f.html', f'{d}/o.html', d), 'host:port is text, not a line ref'
