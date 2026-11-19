@@ -2,8 +2,7 @@
 
 How I want any artifact page or diagram made, in every project and for every kind of content
 (plans, explanations, reports, reviews, study notes). This rule covers how a page looks and how it is
-built. Where the file goes is decided by `vscode-artifact.md`. A project's own instructions win when
-they conflict with this file.
+built. A project's own instructions win when they conflict with this file.
 
 ## Pictures first, very little text
 

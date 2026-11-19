@@ -15,4 +15,4 @@ Global instructions Claude Code loads in every project. To use one, copy it into
 - **[clean-code](rules/clean-code.md)** — How code should read top to bottom: names, function size and order, blank lines, comments, error handling, tests, plus notes for Python, TypeScript, Bun and C/C++.
 - **[Karpathy](rules/Karpathy.md)** — Think before coding, keep it simple, change only what the task needs, and define a check that proves the work is done.
 - **[Trash_rm](rules/Trash_rm.md)** — Delete files only with the macOS `trash` command after you approve the paths; never `rm`.
-- **[artifact-style](rules/artifact-style.md)** — How artifact pages and diagrams look: pictures before text, a calm light theme, no animation, readable at phone width. It mentions a `vscode-artifact.md` rule that is not in this repo; that part only applies inside VS Code.
+- **[artifact-style](rules/artifact-style.md)** — How artifact pages and diagrams look: pictures before text, a calm light theme, no animation, readable at phone width.
