@@ -1,4 +1,4 @@
-# general-use-skills
+# general-use-agent-settings
 Personal skills I use daily.
 
 > **Heads up: this repo changes frequently.** These skills reflect my personal habits and workflows, and AI models keep improving. Skills may be modified, added, or retired at any time as my usage evolves and as models make some of them unnecessary.
